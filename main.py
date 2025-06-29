@@ -4,10 +4,10 @@ import yfinance as yf
 
 def main():
     ticker = 'AMD'
-    start_date = '2020-01-01'
-    end_date = '2024-01-01'
-    short_window = 20
-    long_window = 50
+    start_date = '2023-01-01'
+    end_date = '2023-07-07'
+    short_window = 6
+    long_window = 10
     initial_capital = 10000.0
 
     try:

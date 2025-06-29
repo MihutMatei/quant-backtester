@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 
-def moving_average_signals(df, short_window=20, long_window=50):
+def moving_average_signals(df, short_window, long_window):
     signals = pd.DataFrame(index=df.index)
     signals['signal'] = 0.0
 
