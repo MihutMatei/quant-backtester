@@ -54,7 +54,7 @@ def backtest_strategy(df, signals, initial_capital=10000.0):
     return portfolio
 
 def plot_portfolio(portfolio, benchmark_df, initial_capital, ticker='Strategy'):
-    import matplotlib.pyplot as plt
+
     
     # Clear any existing plots and create new figure
     plt.close('all')
