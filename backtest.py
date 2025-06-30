@@ -133,11 +133,7 @@ def plot_portfolio(portfolio, benchmark_df, initial_capital, ticker='Strategy'):
     plt.close('all')
     fig, ax = plt.subplots(figsize=(12,8))
 
-    # Debug: Print portfolio info
-    print(f"Portfolio Total min: {portfolio['Total'].min()}")
-    print(f"Portfolio Total max: {portfolio['Total'].max()}")
-    print(f"Portfolio Total first few values:\n{portfolio['Total'].head()}")
-    print(f"Portfolio Total has NaN: {portfolio['Total'].isna().any()}")
+
 
     # Plot your strategy
     strategy_total = portfolio['Total'].dropna()
@@ -147,13 +143,13 @@ def plot_portfolio(portfolio, benchmark_df, initial_capital, ticker='Strategy'):
     if not strategy_total.empty:
         # Use the axes directly
         ax.plot(strategy_total.index, strategy_total.values, label=f'{ticker} Strategy', color='blue', linewidth=3)
-        print("Blue line plotted successfully")
+        # print("Blue line plotted successfully")
     else:
         print("Warning: Strategy portfolio is empty or all NaN")
     
     # Add SPY benchmark back
     ax.plot(normalized_benchmark.index, normalized_benchmark.values, label='Buy & Hold', color='orange', linewidth=3)
-    print("Orange Buy & Hold line plotted successfully")
+    # print("Orange Buy & Hold line plotted successfully")
     
     # Create performance metrics text
     metrics_text = (

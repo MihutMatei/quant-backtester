@@ -1,8 +1,8 @@
 # Easy configuration options - change these to experiment with different timeframes
-TICKER = 'AMD'
+TICKER = 'PLTR'
 PERIOD = "30d"      # Options: 1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, 10y, ytd, max
 INTERVAL = "5m"     # Options: 1m, 2m, 5m, 15m, 30m, 60m, 90m, 1h, 1d, 5d, 1wk, 1mo, 3mo
-STRATEGY = "mean_reversion"  # Options: "mean_reversion", "moving_average"
+STRATEGY = 1  # Options: 1 == "mean_reversion", 2=="moving_average"
 
 # Note: 1m and 2m data limited to 7 days, 5m-90m data limited to 60 days
 
@@ -24,11 +24,19 @@ def main():
     threshold = 1.0
 
     try:
-        # Period-based approach with 5-minute intervals
-        df, signals = generate_mean_reversal_strat(
-            ticker, period=period, interval=interval,
-            window=window, threshold=threshold
-        )
+        # Dynamically select strategy based on STRATEGY configuration
+        if STRATEGY == 1:
+            df, signals = generate_mean_reversal_strat(
+                ticker, period=period, interval=interval,
+                window=window, threshold=threshold
+            )
+        elif STRATEGY == 2:
+            df, signals = generate_moving_avg_corssorver_strat(
+                ticker, period=period, interval=interval,
+                short_window=short_window, long_window=long_window
+            )
+        else:
+            raise ValueError(f"Unknown strategy: {STRATEGY}. Use 'mean_reversion' or 'moving_average'")
 
     except ValueError as e:
         print(e)
@@ -41,11 +49,12 @@ def main():
         return
 
     portfolio, transactions = backtest_strategy(df, signals, initial_capital)
-    plot_portfolio(portfolio, benchmark, initial_capital, f"{ticker}_{interval}")
+    plot_portfolio(portfolio, benchmark, initial_capital, f"{ticker}_{interval}_{STRATEGY}")
     
     # Print summary of transactions
     if transactions:
         print(f"\nTransaction Summary:")
+        print(f"Strategy: {STRATEGY}")
         print(f"Total transactions: {len(transactions)}")
         print(f"First transaction: {transactions[0]['Date'].strftime('%Y-%m-%d %H:%M')} - {transactions[0]['Action']}")
         print(f"Last transaction: {transactions[-1]['Date'].strftime('%Y-%m-%d %H:%M')} - {transactions[-1]['Action']}")
