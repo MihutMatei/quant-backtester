@@ -30,13 +30,9 @@ def mean_reversion_signals(df, window, threshold):
     signals['zscore'] = (price - rolling_mean) / rolling_std
 
     # only assign from the first full window onward
-    idx = signals.index[window:]
-
-    # nested np.where: long below –threshold, short above +threshold, else hold
-    zs = signals['zscore'].loc[idx]
-    signals.loc[idx, 'signal'] = np.where(
-        zs < -threshold, 1.0,
-        np.where(zs > threshold, -1.0, 0.0)
+    signals.loc[signals.index[window:], 'signal'] = np.where(
+        signals['zscore'][window:] < -threshold, 1.0,
+        np.where(signals['zscore'][window:] > threshold, -1.0, 0.0)
     )
 
     signals['positions'] = signals['signal'].diff()
