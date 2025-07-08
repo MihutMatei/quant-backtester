@@ -43,3 +43,50 @@ def generate_mean_reversal_strat(ticker, start_date=None, end_date=None, window=
     
     signals = mean_reversion_signals(df, window, threshold)
     return df, signals
+
+def generate_williamsr_strat(
+    ticker: str,
+    start_date: str = None,
+    end_date:   str = None,
+    period:     str = None,
+    interval:   str = "1d",
+    wr_period:          int   = 14,
+    long_entry_thresh:  float = -80.0,
+    long_exit_thresh:   float = -50.0,
+    short_entry_thresh: float = -20.0,
+    short_exit_thresh:  float = -50.0
+):
+    """
+    Returns price df and signals with explicit buy/sell/short/cover flags.
+    """
+    # 1) fetch data
+    if start_date and end_date and not period:
+        df = fetch_data_legacy(ticker, start_date, end_date)
+    else:
+        df = fetch_data(ticker,
+                        start_date=start_date,
+                        end_date=end_date,
+                        period=period,
+                        interval=interval)
+
+    # 2) compute %R + stateful signal
+    signals = williamsr_signals(
+        df,
+        period=wr_period,
+        long_entry_thresh=long_entry_thresh,
+        long_exit_thresh= long_exit_thresh,
+        short_entry_thresh=short_entry_thresh,
+        short_exit_thresh= short_exit_thresh
+    )
+
+    # 3) explicit event flags
+    pos   = signals['positions']
+    sig   = signals['signal']
+    prev  = sig.shift(1).fillna(0.0)
+
+    signals['long_entry']   = (pos ==  1.0) & (sig ==  1.0)
+    signals['long_exit']    = (pos == -1.0) & (prev == 1.0)
+    signals['short_entry']  = (pos == -1.0) & (sig == -1.0)
+    signals['short_exit']   = (pos ==  1.0) & (prev == -1.0)
+
+    return df, signals
