@@ -1,7 +1,7 @@
 from data_fetcher import fetch_data, fetch_data_legacy
 from signals import *
 
-def generate_moving_avg_corssorver_strat(ticker, start_date=None, end_date=None, short_window=20, long_window=50, period=None, interval="1d"):
+def generate_moving_avg_crossover_strat(ticker, start_date=None, end_date=None, short_window=20, long_window=50, period=None, interval="1d"):
     """
     Generate moving average crossover strategy with flexible time control
     
@@ -44,7 +44,10 @@ def generate_mean_reversal_strat(ticker, start_date=None, end_date=None, window=
     signals = mean_reversion_signals(df, window, threshold)
     return df, signals
 
-def generate_williamsr_strat(
+
+
+
+def generate_williamsr_strat_long_and_short(
     ticker: str,
     start_date: str = None,
     end_date:   str = None,
