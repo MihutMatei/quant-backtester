@@ -39,7 +39,7 @@ def calculate_performance_metrics(portfolio_values, trading_days_per_year=252):
 def backtest_strategy(df, signals, initial_capital=10000.0, log_transactions=True,
                      stop_loss_pct=None, take_profit_pct=None, 
                      use_trailing_stop=False, trailing_stop_pct=None,
-                     enable_shorting=True, dedup_window_minutes=5):
+                     enable_shorting=True, dedup_window_minutes=5, spread_pct=0.001):
     """
     Enhanced backtest with stop-loss, take-profit, and shorting functionality
     
@@ -54,6 +54,7 @@ def backtest_strategy(df, signals, initial_capital=10000.0, log_transactions=Tru
         trailing_stop_pct: Trailing stop percentage
         enable_shorting: Enable short selling functionality
         dedup_window_minutes: Time window in minutes to prevent duplicate transactions
+        spread_pct: Bid-ask spread percentage (e.g., 0.001 for 0.1%)
     """
     cash = initial_capital
     shares = 0.0  # Positive for long positions, negative for short positions
@@ -97,6 +98,20 @@ def backtest_strategy(df, signals, initial_capital=10000.0, log_transactions=Tru
         nonlocal last_transaction_time, last_transaction_type
         last_transaction_time = current_time
         last_transaction_type = action_type
+
+    def get_transaction_price(mid_price, action_type, spread_pct):
+        """Calculate actual transaction price considering bid-ask spread"""
+        spread = mid_price * spread_pct
+        
+        if action_type in ['BUY', 'COVER']:
+            # Buying: pay ask price (mid + spread/2)
+            return mid_price * (1 + spread_pct / 2)
+        elif action_type in ['SELL', 'SHORT']:
+            # Selling: receive bid price (mid - spread/2)
+            return mid_price * (1 - spread_pct / 2)
+        else:
+            # Risk management exits: use mid price
+            return mid_price
 
     for i, (date, row) in enumerate(df.iterrows()):
         current_price = row[price_col]
@@ -175,11 +190,16 @@ def backtest_strategy(df, signals, initial_capital=10000.0, log_transactions=Tru
             
             # Execute risk management exit
             if should_exit:
+                # Determine transaction price with spread adjustment
                 if position_type == 'long':
-                    pnl = (exit_price - position_entry_price) * shares
-                    cash += shares * exit_price
+                    # Selling long position
+                    transaction_price = get_transaction_price(exit_price, 'SELL', spread_pct)
+                    pnl = (transaction_price - position_entry_price) * shares
+                    cash += shares * transaction_price
                 elif position_type == 'short':
-                    pnl = (position_entry_price - exit_price) * abs(shares)
+                    # Covering short position
+                    transaction_price = get_transaction_price(exit_price, 'COVER', spread_pct)
+                    pnl = (position_entry_price - transaction_price) * abs(shares)
                     cash += pnl  # Add the PnL to cash
                 
                 pnl_pct = pnl / (position_entry_price * abs(shares)) * 100
@@ -189,7 +209,7 @@ def backtest_strategy(df, signals, initial_capital=10000.0, log_transactions=Tru
                     transactions.append({
                         'Date': date,
                         'Action': action,
-                        'Price': exit_price,
+                        'Price': transaction_price,
                         'Shares': abs(shares),
                         'PnL': pnl,
                         'Return': pnl_pct,
@@ -207,11 +227,12 @@ def backtest_strategy(df, signals, initial_capital=10000.0, log_transactions=Tru
         if current_signal != prev_signal:
             if current_signal == 1.0 and shares == 0:  # Buy signal when not in position
                 if cash > 0 and should_allow_transaction('BUY', date):
-                    new_shares = cash / current_price
+                    transaction_price = get_transaction_price(current_price, 'BUY', spread_pct)
+                    new_shares = cash / transaction_price
                     
                     shares = new_shares
                     cash = 0.0
-                    position_entry_price = current_price
+                    position_entry_price = transaction_price
                     position_entry_date = date
                     trailing_stop_price = None
                     position_type = 'long'
@@ -220,26 +241,27 @@ def backtest_strategy(df, signals, initial_capital=10000.0, log_transactions=Tru
                         transactions.append({
                             'Date': date,
                             'Action': 'BUY',
-                            'Price': current_price,
+                            'Price': transaction_price,
                             'Shares': new_shares,
                             'PnL': 0.0,
                             'Return': 0.0,
-                            'Portfolio_Value': cash + shares * current_price
+                            'Portfolio_Value': shares * current_price
                         })
                         record_transaction('BUY', date)
             
             elif current_signal == -1.0 and shares > 0:  # Sell signal when in long position
                 if should_allow_transaction('SELL', date):
-                    pnl = (current_price - position_entry_price) * shares
-                    pnl_pct = (current_price - position_entry_price) / position_entry_price * 100
+                    transaction_price = get_transaction_price(current_price, 'SELL', spread_pct)
+                    pnl = (transaction_price - position_entry_price) * shares
+                    pnl_pct = (transaction_price - position_entry_price) / position_entry_price * 100
                     
-                    cash = shares * current_price
+                    cash = shares * transaction_price
                     
                     if log_transactions:
                         transactions.append({
                             'Date': date,
                             'Action': 'SELL',
-                            'Price': current_price,
+                            'Price': transaction_price,
                             'Shares': shares,
                             'PnL': pnl,
                             'Return': pnl_pct,
@@ -255,12 +277,13 @@ def backtest_strategy(df, signals, initial_capital=10000.0, log_transactions=Tru
                     
                     # If shorting is enabled, enter short position immediately
                     if enable_shorting and cash > 0 and should_allow_transaction('SHORT', date):
-                        short_shares = cash / current_price
+                        transaction_price = get_transaction_price(current_price, 'SHORT', spread_pct)
+                        short_shares = cash / transaction_price
                         
                         shares = -short_shares  # Negative for short position
                         # For short positions, we keep the cash from the original sale
                         # and track the short position separately
-                        position_entry_price = current_price
+                        position_entry_price = transaction_price
                         position_entry_date = date
                         trailing_stop_price = None
                         position_type = 'short'
@@ -269,7 +292,7 @@ def backtest_strategy(df, signals, initial_capital=10000.0, log_transactions=Tru
                             transactions.append({
                                 'Date': date,
                                 'Action': 'SHORT',
-                                'Price': current_price,
+                                'Price': transaction_price,
                                 'Shares': short_shares,
                                 'PnL': 0.0,
                                 'Return': 0.0,
@@ -279,11 +302,12 @@ def backtest_strategy(df, signals, initial_capital=10000.0, log_transactions=Tru
             
             elif current_signal == -1.0 and shares == 0 and enable_shorting:  # Short signal when not in position
                 if cash > 0 and should_allow_transaction('SHORT', date):
-                    short_shares = cash / current_price
+                    transaction_price = get_transaction_price(current_price, 'SHORT', spread_pct)
+                    short_shares = cash / transaction_price
                     
                     shares = -short_shares  # Negative for short position
                     # For short positions, we keep the original cash
-                    position_entry_price = current_price
+                    position_entry_price = transaction_price
                     position_entry_date = date
                     trailing_stop_price = None
                     position_type = 'short'
@@ -292,7 +316,7 @@ def backtest_strategy(df, signals, initial_capital=10000.0, log_transactions=Tru
                         transactions.append({
                             'Date': date,
                             'Action': 'SHORT',
-                            'Price': current_price,
+                            'Price': transaction_price,
                             'Shares': short_shares,
                             'PnL': 0.0,
                             'Return': 0.0,
@@ -302,8 +326,9 @@ def backtest_strategy(df, signals, initial_capital=10000.0, log_transactions=Tru
             
             elif current_signal == 1.0 and shares < 0:  # Buy signal when in short position (cover)
                 if should_allow_transaction('COVER', date):
-                    pnl = (position_entry_price - current_price) * abs(shares)
-                    pnl_pct = (position_entry_price - current_price) / position_entry_price * 100
+                    transaction_price = get_transaction_price(current_price, 'COVER', spread_pct)
+                    pnl = (position_entry_price - transaction_price) * abs(shares)
+                    pnl_pct = (position_entry_price - transaction_price) / position_entry_price * 100
                     
                     # Cover short position: add PnL to cash
                     cash = cash + pnl
@@ -312,7 +337,7 @@ def backtest_strategy(df, signals, initial_capital=10000.0, log_transactions=Tru
                         transactions.append({
                             'Date': date,
                             'Action': 'COVER',
-                            'Price': current_price,
+                            'Price': transaction_price,
                             'Shares': abs(shares),
                             'PnL': pnl,
                             'Return': pnl_pct,
@@ -328,11 +353,12 @@ def backtest_strategy(df, signals, initial_capital=10000.0, log_transactions=Tru
                     
                     # Enter long position immediately after covering
                     if cash > 0 and should_allow_transaction('BUY', date):
-                        new_shares = cash / current_price
+                        transaction_price = get_transaction_price(current_price, 'BUY', spread_pct)
+                        new_shares = cash / transaction_price
                         
                         shares = new_shares
                         cash = 0.0
-                        position_entry_price = current_price
+                        position_entry_price = transaction_price
                         position_entry_date = date
                         trailing_stop_price = None
                         position_type = 'long'
@@ -341,7 +367,7 @@ def backtest_strategy(df, signals, initial_capital=10000.0, log_transactions=Tru
                             transactions.append({
                                 'Date': date,
                                 'Action': 'BUY',
-                                'Price': current_price,
+                                'Price': transaction_price,
                                 'Shares': new_shares,
                                 'PnL': 0.0,
                                 'Return': 0.0,
@@ -351,16 +377,17 @@ def backtest_strategy(df, signals, initial_capital=10000.0, log_transactions=Tru
             
             elif current_signal == 0.0 and shares > 0:  # Exit signal when in long position
                 if should_allow_transaction('EXIT_LONG', date):
-                    pnl = (current_price - position_entry_price) * shares
-                    pnl_pct = (current_price - position_entry_price) / position_entry_price * 100
+                    transaction_price = get_transaction_price(current_price, 'SELL', spread_pct)
+                    pnl = (transaction_price - position_entry_price) * shares
+                    pnl_pct = (transaction_price - position_entry_price) / position_entry_price * 100
                     
-                    cash = shares * current_price
+                    cash = shares * transaction_price
                     
                     if log_transactions:
                         transactions.append({
                             'Date': date,
                             'Action': 'EXIT_LONG',
-                            'Price': current_price,
+                            'Price': transaction_price,
                             'Shares': shares,
                             'PnL': pnl,
                             'Return': pnl_pct,
@@ -376,14 +403,15 @@ def backtest_strategy(df, signals, initial_capital=10000.0, log_transactions=Tru
                 
             elif current_signal == 0.0 and shares < 0:  # Exit signal when in short position
                 if should_allow_transaction('EXIT_SHORT', date):
-                    pnl = (position_entry_price - current_price) * abs(shares)
-                    pnl_pct = (position_entry_price - current_price) / position_entry_price * 100
+                    transaction_price = get_transaction_price(current_price, 'COVER', spread_pct)
+                    pnl = (position_entry_price - transaction_price) * abs(shares)
+                    pnl_pct = (position_entry_price - transaction_price) / position_entry_price * 100
                     
                     if log_transactions:
                         transactions.append({
                             'Date': date,
                             'Action': 'EXIT_SHORT',
-                            'Price': current_price,
+                            'Price': transaction_price,
                             'Shares': abs(shares),
                             'PnL': pnl,
                             'Return': pnl_pct,
