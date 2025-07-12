@@ -3,16 +3,46 @@
 # ========== Configuration ==========
 
 # General
-TICKER     = 'XEL'
-PERIOD     = "2y"      # 1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, 10y, ytd, max
-INTERVAL   = "1d"       # 1m, 2m, 5m, 15m, 30m, 60m, 90m, 1h, 1d, 5d, 1wk, 1mo, 3mo
+TICKER     = 'SPY'
+PERIOD     = "60d"      # 1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, 10y, ytd, max
+INTERVAL   = "5m"       # 1m, 2m, 5m, 15m, 30m, 60m, 90m, 1h, 1d, 5d, 1wk, 1mo, 3mo
 INITIAL_CAPITAL = 10000.0
 
+
+# Risk Management params
+ENABLE_SHORTING = True          # Enable short selling functionality
+STOP_LOSS_PCT = 0.012            # Stop loss percentage (e.g., 0.05 for 5%)
+TAKE_PROFIT_PCT = 0.05        # Take profit percentage (e.g., 0.10 for 10%)
+USE_TRAILING_STOP = False       # Enable trailing stop loss
+TRAILING_STOP_PCT = 0.03        # Trailing stop percentage (e.g., 0.03 for 3%)
+DEDUP_WINDOW_MINUTES = 5       # Time window in minutes to prevent duplicate transactions (optimized)
+
 # Strategy selector
-STRATEGY   = 1          # 1='mean_reversion', 2='moving_average', 3='williams_%R'
+# 1='mean_reversion', 2='moving_average', 
+# 3='williams_%R', 4='matei_strat', 5='rsi'
+
+STRATEGY = 4
+
+# Matei Strategy params
+# Matei Strategy params (optimized)
+MATEI_RSI_PERIOD = 72
+MATEI_WR_PERIOD = 72
+MATEI_VOL_LOOKBACK = 72
+MATEI_RSI_BUY_TH = 60
+MATEI_RSI_SELL_TH = 40
+MATEI_WR_BUY_TH = -85
+MATEI_WR_SELL_TH = -15
+MATEI_VOL_BUY_TH = 0.007
+MATEI_VOL_SELL_TH = 0.000
+
+# RSI Strategy params
+RSI_PERIOD = 14
+RSI_BUY_THRESHOLD = 30      # Buy when RSI <= 30 (oversold)
+RSI_SELL_THRESHOLD = 70     # Sell when RSI >= 70 (overbought)
+
 
 # Mean‐Reversion params
-MR_WINDOW    = 27       # look-back window (in bars)
+MR_WINDOW    = 20       # look-back window (in bars)
 MR_THRESHOLD = 1.0      # z-score entry/exit threshold
 
 # Moving‐Average crossover params
@@ -20,7 +50,7 @@ MA_SHORT_WINDOW = 5     # in bars
 MA_LONG_WINDOW  = 20    # in bars
 
 # Williams %R strategy params
-WR_PERIOD             = 14     # look-back window
+WR_PERIOD             = 28     # look-back window
 WR_LONG_ENTRY_THRESH  = -80.0  # enter long when %R ≤ this
 WR_LONG_EXIT_THRESH   = -20.0  # exit long when %R ≥ this
 WR_SHORT_ENTRY_THRESH = -20.0  # enter short when %R ≥ this
@@ -38,6 +68,7 @@ CUSTOM_HOUR_RANGES    = [(2, 4), (8, 12), (20, 24)]
 
 from strategy import *
 from backtest import *
+import yfinance as yf
 import yfinance as yf
 
 
@@ -73,7 +104,30 @@ def main():
                 short_entry_thresh=WR_SHORT_ENTRY_THRESH,
                 short_exit_thresh=WR_SHORT_EXIT_THRESH
             )
-
+        elif STRATEGY == 4:
+            df, signals = generate_matei_strat(
+                TICKER,
+                period=PERIOD,
+                interval=INTERVAL,
+                rsi_period=MATEI_RSI_PERIOD,
+                wr_period=MATEI_WR_PERIOD,
+                vol_lookback=MATEI_VOL_LOOKBACK,
+                rsi_buy_th=MATEI_RSI_BUY_TH,
+                rsi_sell_th=MATEI_RSI_SELL_TH,
+                wr_buy_th=MATEI_WR_BUY_TH,
+                wr_sell_th=MATEI_WR_SELL_TH,
+                vol_buy_th=MATEI_VOL_BUY_TH,
+                vol_sell_th=MATEI_VOL_SELL_TH
+    )
+        elif STRATEGY == 5:
+            df, signals = generate_rsi_strat(
+                TICKER,
+                period=PERIOD,
+                interval=INTERVAL,
+                rsi_period=RSI_PERIOD,
+                buy_threshold=RSI_BUY_THRESHOLD,
+                sell_threshold=RSI_SELL_THRESHOLD
+    )
         else:
             raise ValueError(
                 f"Unknown strategy: {STRATEGY}. "
@@ -95,9 +149,16 @@ def main():
         print("Could not download benchmark data.")
         return
 
-    # 3) Backtest
+    # 3) Backtest with risk management
     portfolio, transactions = backtest_strategy(
-        df, signals, INITIAL_CAPITAL
+        df, signals, INITIAL_CAPITAL,
+        log_transactions=True,
+        stop_loss_pct=STOP_LOSS_PCT,
+        take_profit_pct=TAKE_PROFIT_PCT,
+        use_trailing_stop=USE_TRAILING_STOP,
+        trailing_stop_pct=TRAILING_STOP_PCT,
+        enable_shorting=ENABLE_SHORTING,
+        dedup_window_minutes=DEDUP_WINDOW_MINUTES
     )
 
     # 4) Full-period plot
