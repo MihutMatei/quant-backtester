@@ -5,14 +5,14 @@ import matplotlib.pyplot as plt
 from core.metrics import calculate_performance_metrics
 
 
-def plot_portfolio(portfolio, benchmark_df, initial_capital, ticker='Strategy', transactions=None, zoom_days=None, custom_start_day=None, custom_end_day=None, custom_start_hour=None, custom_end_hour=None):
+def plot_portfolio(portfolio, benchmark_df, initial_capital, ticker='Strategy', transactions=None, zoom_days=None, custom_start_day=None, custom_end_day=None, custom_start_hour=None, custom_end_hour=None, interval=None):
     # Calculate performance metrics for strategy
-    strategy_metrics = calculate_performance_metrics(portfolio['total'])
+    strategy_metrics = calculate_performance_metrics(portfolio['total'], interval=interval)
     
     # Calculate performance metrics for buy & hold benchmark
     benchmark = benchmark_df['Close'].reindex(portfolio.index).ffill()
     normalized_benchmark = benchmark / benchmark.iloc[0].item() * initial_capital
-    benchmark_metrics = calculate_performance_metrics(normalized_benchmark)
+    benchmark_metrics = calculate_performance_metrics(normalized_benchmark, interval=interval)
 
     # Apply zoom or custom date range if specified
     if custom_start_hour is not None and custom_end_hour is not None:

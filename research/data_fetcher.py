@@ -2,7 +2,7 @@ import yfinance as yf
 import pandas as pd
 import os
 
-from core.frames import normalize_ohlcv
+from core.frames import normalize_ohlcv, validate_ohlcv
 
 # Default configuration constants
 DEFAULT_PERIOD = "2y"  # Default period for data fetching
@@ -56,6 +56,7 @@ def fetch_data(ticker, start_date=None, end_date=None, period=None, interval=DEF
         raise ValueError(f"No data downloaded for ticker: {ticker}")
     
     df = normalize_ohlcv(df)
+    validate_ohlcv(df, context=ticker)
     
     # Save to CSV if requested
     if save_to_csv:

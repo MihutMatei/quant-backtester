@@ -5,7 +5,8 @@ import pandas as pd
 def backtest_strategy(df, signals, initial_capital=10000.0, log_transactions=True,
                      stop_loss_pct=None, take_profit_pct=None, 
                      use_trailing_stop=False, trailing_stop_pct=None,
-                     enable_shorting=True, dedup_window_minutes=5, spread_pct=0.001):
+                     enable_shorting=True, dedup_window_minutes=5, spread_pct=0.001,
+                     execution_lag=1):
     """
     Enhanced backtest with stop-loss, take-profit, and shorting functionality
     
@@ -21,6 +22,11 @@ def backtest_strategy(df, signals, initial_capital=10000.0, log_transactions=Tru
         enable_shorting: Enable short selling functionality
         dedup_window_minutes: Time window in minutes to prevent duplicate transactions
         spread_pct: Bid-ask spread percentage (e.g., 0.001 for 0.1%)
+        execution_lag: Bars between a signal and its fill. Signals are computed
+            on a bar's close, so they cannot be acted on until the next bar --
+            live, you observe the closed bar and then send the order. With
+            lag >= 1 fills happen at the Open of the execution bar. Pass 0 to
+            reproduce the old same-bar-close fills (look-ahead optimistic).
     """
     cash = initial_capital
     shares = 0.0  # Positive for long positions, negative for short positions
@@ -43,6 +49,13 @@ def backtest_strategy(df, signals, initial_capital=10000.0, log_transactions=Tru
     position_type = None  # 'long' or 'short'
     
     price_col = 'Adj Close' if 'Adj Close' in df.columns else 'Close'
+
+    # A signal derived from bar i's close cannot be filled until bar i+lag.
+    signal_series = signals['signal']
+    if execution_lag:
+        signal_series = signal_series.shift(execution_lag).fillna(0.0)
+    # Market order sent after the close fills at the next bar's open.
+    fill_col = 'Open' if execution_lag and 'Open' in df.columns else price_col
     
     def should_allow_transaction(action_type, current_time):
         """Check if a transaction should be allowed based on deduplication window"""
@@ -81,8 +94,9 @@ def backtest_strategy(df, signals, initial_capital=10000.0, log_transactions=Tru
 
     for i, (date, row) in enumerate(df.iterrows()):
         current_price = row[price_col]
-        current_signal = signals.iloc[i]['signal']
-        prev_signal = signals.iloc[i-1]['signal'] if i > 0 else 0.0
+        fill_price = row[fill_col]
+        current_signal = signal_series.iloc[i]
+        prev_signal = signal_series.iloc[i-1] if i > 0 else 0.0
         
         # Risk management checks for existing positions
         if shares != 0 and position_entry_price is not None:
@@ -193,7 +207,7 @@ def backtest_strategy(df, signals, initial_capital=10000.0, log_transactions=Tru
         if current_signal != prev_signal:
             if current_signal == 1.0 and shares == 0:  # Buy signal when not in position
                 if cash > 0 and should_allow_transaction('BUY', date):
-                    transaction_price = get_transaction_price(current_price, 'BUY', spread_pct)
+                    transaction_price = get_transaction_price(fill_price, 'BUY', spread_pct)
                     new_shares = cash / transaction_price
                     
                     shares = new_shares
@@ -217,7 +231,7 @@ def backtest_strategy(df, signals, initial_capital=10000.0, log_transactions=Tru
             
             elif current_signal == -1.0 and shares > 0:  # Sell signal when in long position
                 if should_allow_transaction('SELL', date):
-                    transaction_price = get_transaction_price(current_price, 'SELL', spread_pct)
+                    transaction_price = get_transaction_price(fill_price, 'SELL', spread_pct)
                     pnl = (transaction_price - position_entry_price) * shares
                     pnl_pct = (transaction_price - position_entry_price) / position_entry_price * 100
                     
@@ -243,7 +257,7 @@ def backtest_strategy(df, signals, initial_capital=10000.0, log_transactions=Tru
                     
                     # If shorting is enabled, enter short position immediately
                     if enable_shorting and cash > 0 and should_allow_transaction('SHORT', date):
-                        transaction_price = get_transaction_price(current_price, 'SHORT', spread_pct)
+                        transaction_price = get_transaction_price(fill_price, 'SHORT', spread_pct)
                         short_shares = cash / transaction_price
                         
                         shares = -short_shares  # Negative for short position
@@ -268,7 +282,7 @@ def backtest_strategy(df, signals, initial_capital=10000.0, log_transactions=Tru
             
             elif current_signal == -1.0 and shares == 0 and enable_shorting:  # Short signal when not in position
                 if cash > 0 and should_allow_transaction('SHORT', date):
-                    transaction_price = get_transaction_price(current_price, 'SHORT', spread_pct)
+                    transaction_price = get_transaction_price(fill_price, 'SHORT', spread_pct)
                     short_shares = cash / transaction_price
                     
                     shares = -short_shares  # Negative for short position
@@ -292,7 +306,7 @@ def backtest_strategy(df, signals, initial_capital=10000.0, log_transactions=Tru
             
             elif current_signal == 1.0 and shares < 0:  # Buy signal when in short position (cover)
                 if should_allow_transaction('COVER', date):
-                    transaction_price = get_transaction_price(current_price, 'COVER', spread_pct)
+                    transaction_price = get_transaction_price(fill_price, 'COVER', spread_pct)
                     pnl = (position_entry_price - transaction_price) * abs(shares)
                     pnl_pct = (position_entry_price - transaction_price) / position_entry_price * 100
                     
@@ -319,7 +333,7 @@ def backtest_strategy(df, signals, initial_capital=10000.0, log_transactions=Tru
                     
                     # Enter long position immediately after covering
                     if cash > 0 and should_allow_transaction('BUY', date):
-                        transaction_price = get_transaction_price(current_price, 'BUY', spread_pct)
+                        transaction_price = get_transaction_price(fill_price, 'BUY', spread_pct)
                         new_shares = cash / transaction_price
                         
                         shares = new_shares
@@ -343,7 +357,7 @@ def backtest_strategy(df, signals, initial_capital=10000.0, log_transactions=Tru
             
             elif current_signal == 0.0 and shares > 0:  # Exit signal when in long position
                 if should_allow_transaction('EXIT_LONG', date):
-                    transaction_price = get_transaction_price(current_price, 'SELL', spread_pct)
+                    transaction_price = get_transaction_price(fill_price, 'SELL', spread_pct)
                     pnl = (transaction_price - position_entry_price) * shares
                     pnl_pct = (transaction_price - position_entry_price) / position_entry_price * 100
                     
@@ -369,7 +383,7 @@ def backtest_strategy(df, signals, initial_capital=10000.0, log_transactions=Tru
                 
             elif current_signal == 0.0 and shares < 0:  # Exit signal when in short position
                 if should_allow_transaction('EXIT_SHORT', date):
-                    transaction_price = get_transaction_price(current_price, 'COVER', spread_pct)
+                    transaction_price = get_transaction_price(fill_price, 'COVER', spread_pct)
                     pnl = (position_entry_price - transaction_price) * abs(shares)
                     pnl_pct = (position_entry_price - transaction_price) / position_entry_price * 100
                     

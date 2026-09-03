@@ -17,6 +17,8 @@ USE_TRAILING_STOP = False         # Enable trailing stop loss
 TRAILING_STOP_PCT = 0.03          # Trailing stop percentage (3%)
 DEDUP_WINDOW_MINUTES = 30        # Time window to prevent duplicate transactions
 SPREAD_PCT = 0.001                # Bid-ask spread percentage (0.1% for SPY)
+EXECUTION_LAG = 1                 # Bars between signal and fill (0 = old same-bar close)
+RSI_LONG_ONLY = True              # Map the RSI short leg to flat
 
 # Strategy selector
 # 1='mean_reversion', 2='moving_average', 
@@ -133,7 +135,8 @@ def main():
                 interval=INTERVAL,
                 rsi_period=RSI_PERIOD,
                 buy_threshold=RSI_BUY_THRESHOLD,
-                sell_threshold=RSI_SELL_THRESHOLD
+                sell_threshold=RSI_SELL_THRESHOLD,
+                long_only=RSI_LONG_ONLY
     )
         else:
             raise ValueError(
@@ -166,7 +169,8 @@ def main():
         trailing_stop_pct=TRAILING_STOP_PCT,
         enable_shorting=ENABLE_SHORTING,
         dedup_window_minutes=DEDUP_WINDOW_MINUTES,
-        spread_pct=SPREAD_PCT
+        spread_pct=SPREAD_PCT,
+        execution_lag=EXECUTION_LAG
     )
 
     # 4) Full-period plot
@@ -175,17 +179,18 @@ def main():
         benchmark,
         INITIAL_CAPITAL,
         f"{TICKER}_{INTERVAL}_{STRATEGY}",
-        transactions
+        transactions,
+        interval=INTERVAL
     )
 
     # 5) Optional zoom & custom plots
     if GENERATE_ZOOM_PLOTS:
         plot_portfolio(portfolio, benchmark, INITIAL_CAPITAL,
                        f"{TICKER}_{INTERVAL}_{STRATEGY}", transactions,
-                       zoom_days=7)
+                       zoom_days=7, interval=INTERVAL)
         plot_portfolio(portfolio, benchmark, INITIAL_CAPITAL,
                        f"{TICKER}_{INTERVAL}_{STRATEGY}", transactions,
-                       zoom_days=14)
+                       zoom_days=14, interval=INTERVAL)
 
     if GENERATE_CUSTOM_RANGE:
         ranges = CUSTOM_RANGES or suggest_custom_ranges(portfolio) if AUTO_SUGGEST_RANGES else CUSTOM_RANGES
@@ -193,14 +198,14 @@ def main():
             plot_portfolio(portfolio, benchmark, INITIAL_CAPITAL,
                            f"{TICKER}_{INTERVAL}_{STRATEGY}", transactions,
                            custom_start_day=start_day,
-                           custom_end_day=end_day)
+                           custom_end_day=end_day, interval=INTERVAL)
 
     if GENERATE_HOUR_RANGES:
         for start_hour, end_hour in CUSTOM_HOUR_RANGES:
             plot_portfolio(portfolio, benchmark, INITIAL_CAPITAL,
                            f"{TICKER}_{INTERVAL}_{STRATEGY}", transactions,
                            custom_start_hour=start_hour,
-                           custom_end_hour=end_hour)
+                           custom_end_hour=end_hour, interval=INTERVAL)
 
     # 6) Transaction summary & analysis
     if transactions:

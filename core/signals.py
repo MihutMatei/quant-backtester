@@ -6,12 +6,17 @@ import pandas as pd
 import numpy as np
 
 
-def rsi_signals(df, period=14, buy_threshold=30, sell_threshold=70):
+def rsi_signals(df, period=14, buy_threshold=30, sell_threshold=70,
+                long_only=True):
     """
     Pure RSI strategy signals
-    
+
     Buy when RSI <= buy_threshold (oversold)
     Sell when RSI >= sell_threshold (overbought)
+
+    With long_only (the default), the short leg is mapped to flat so the
+    signal is {0, 1}. Pass long_only=False to reproduce the two-sided
+    research behaviour.
     """
     signals = pd.DataFrame(index=df.index)
     signals['signal'] = 0.0
@@ -33,6 +38,10 @@ def rsi_signals(df, period=14, buy_threshold=30, sell_threshold=70):
         np.where(signals['rsi'][period:] >= sell_threshold, -1.0, 0.0)
     )
     
+    if long_only:
+        # -1 (short) becomes 0 (flat); positions must be derived after this.
+        signals['signal'] = signals['signal'].clip(lower=0.0)
+
     signals['positions'] = signals['signal'].diff()
-    
+
     return signals

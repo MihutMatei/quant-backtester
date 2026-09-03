@@ -108,7 +108,8 @@ def generate_rsi_strat(
     interval="1d",
     rsi_period=14,
     buy_threshold=30,
-    sell_threshold=70
+    sell_threshold=70,
+    long_only=True
 ):
     """
     Generate pure RSI strategy
@@ -127,7 +128,8 @@ def generate_rsi_strat(
     else:
         df = fetch_data(ticker, start_date=start_date, end_date=end_date, period=period, interval=interval)
     
-    signals = rsi_signals(df, rsi_period, buy_threshold, sell_threshold)
+    signals = rsi_signals(df, rsi_period, buy_threshold, sell_threshold,
+                          long_only=long_only)
     return df, signals
 
 def generate_matei_strat(

@@ -22,3 +22,31 @@ def normalize_ohlcv(df):
     if "Adj Close" in df.columns:
         expected_cols.append("Adj Close")
     return df[[col for col in expected_cols if col in df.columns]]
+
+
+def validate_ohlcv(df, context=""):
+    """Raise if `df` is not a usable OHLCV frame.
+
+    The bot acts on the last bar of whatever it is handed, so a malformed or
+    stale frame must fail loudly here rather than silently produce a signal.
+    """
+    where = f" for {context}" if context else ""
+
+    if df is None or df.empty:
+        raise ValueError(f"Empty OHLCV frame{where}")
+
+    missing = [col for col in OHLCV if col not in df.columns]
+    if missing:
+        raise ValueError(f"OHLCV frame{where} missing columns: {missing}")
+
+    if not isinstance(df.index, pd.DatetimeIndex):
+        raise ValueError(f"OHLCV frame{where} needs a DatetimeIndex")
+
+    if not df.index.is_monotonic_increasing:
+        raise ValueError(f"OHLCV frame{where} is not sorted by time")
+
+    if df["Close"].isna().any():
+        n = int(df["Close"].isna().sum())
+        raise ValueError(f"OHLCV frame{where} has {n} NaN Close value(s)")
+
+    return df
