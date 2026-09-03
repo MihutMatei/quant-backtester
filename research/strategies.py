@@ -1,5 +1,11 @@
-from data_fetcher import fetch_data, fetch_data_legacy
-from signals import *
+from core.signals import rsi_signals
+from research.data_fetcher import fetch_data, fetch_data_legacy
+from research.legacy_signals import (
+    matei_signals,
+    mean_reversion_signals,
+    moving_average_signals,
+    williamsr_signals,
+)
 
 def generate_moving_avg_crossover_strat(ticker, start_date=None, end_date=None, short_window=20, long_window=50, period=None, interval="1d"):
     """

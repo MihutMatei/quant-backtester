@@ -3,8 +3,9 @@
 # Exit on error
 set -e
 
-# Create venv if it doesn't exist
-if [ ! -d "quantenv" ]; then
+# Create venv if missing, or rebuild it if a Python upgrade broke it
+if ! quantenv/bin/python -c "import sys" >/dev/null 2>&1; then
+    rm -rf quantenv
     python -m venv quantenv
     echo "Virtual environment 'quantenv' created."
 fi

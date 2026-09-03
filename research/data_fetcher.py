@@ -2,6 +2,8 @@ import yfinance as yf
 import pandas as pd
 import os
 
+from core.frames import normalize_ohlcv
+
 # Default configuration constants
 DEFAULT_PERIOD = "2y"  # Default period for data fetching
 DEFAULT_INTERVAL = "1d"  # Default interval (daily)
@@ -53,18 +55,7 @@ def fetch_data(ticker, start_date=None, end_date=None, period=None, interval=DEF
     if df.empty:
         raise ValueError(f"No data downloaded for ticker: {ticker}")
     
-    # Handle MultiIndex columns (occurs with multiple tickers)
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = df.columns.get_level_values(0)
-    
-    # Ensure proper index name
-    df.index.name = "Date"
-    
-    # Filter to expected columns
-    expected_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
-    if 'Adj Close' in df.columns:
-        expected_cols.append('Adj Close')
-    df = df[[col for col in expected_cols if col in df.columns]]
+    df = normalize_ohlcv(df)
     
     # Save to CSV if requested
     if save_to_csv:

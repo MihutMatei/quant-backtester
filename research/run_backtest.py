@@ -65,10 +65,18 @@ CUSTOM_HOUR_RANGES    = [(2, 4), (8, 12), (20, 24)]
 
 # ====================================
 
-from strategy import *
-from backtest import *
 import yfinance as yf
-import yfinance as yf
+
+from research.analysis import analyze_trading_patterns
+from research.backtest import backtest_strategy
+from research.plotting import plot_portfolio, suggest_custom_ranges
+from research.strategies import (
+    generate_matei_strat,
+    generate_mean_reversal_strat,
+    generate_moving_avg_crossover_strat,
+    generate_rsi_strat,
+    generate_williamsr_strat,
+)
 
 
 def main():
