@@ -264,6 +264,7 @@ sudo deploy/install.sh
 | `deploy/quant-bot.service` | one `docker run`, `Type=oneshot` |
 | `deploy/quant-bot.timer` | fires at `*:05:00`, `Persistent=true` |
 | `deploy/quant-bot-failure@.service` | `OnFailure=` hook - add a real notifier here |
+| `deploy/allow-my-ip.sh` | repoint the SSH rule after changing networks |
 
 ```
 journalctl -u quant-bot -f            # the trade log
@@ -272,6 +273,19 @@ systemctl list-units --failed         # did anything break
 systemctl start quant-bot.service     # run one bar now
 systemctl disable --now quant-bot.timer
 ```
+
+**SSH access from a changing address.** The security group allows port 22 from
+one address. After moving between networks, `deploy/allow-my-ip.sh <sg-id>`
+repoints it at wherever you are now and revokes the stale rules - otherwise
+every network you have ever used stays permanently open. It authorises the new
+address before revoking the old ones, since security group changes apply to
+established connections and revoking first could cut the session you are using
+to run it.
+
+A stale rule shows up as SSH *timing out* rather than being refused: the group
+silently drops the packets, so there is nothing to answer you. The bot is
+unaffected either way - it only makes outbound connections and never needs
+inbound SSH to trade.
 
 **Why `:05` and not `:00`.** The hourly bar closes exactly on the hour; firing
 on the boundary races the bar's own aggregation. Five past is clear of it.
