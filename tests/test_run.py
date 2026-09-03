@@ -153,3 +153,38 @@ class TestReportingCannotBlockTrading:
         mp.setattr(run_module, "Broker", lambda *a, **k: broker)
         assert run_module.main() == 0
         assert len(broker.orders) == 1
+
+
+class TestHeartbeatBody:
+    """The body is what lands in the alert mail, so it must stand alone."""
+
+    def test_healthy_body_names_the_bot_and_the_time(self, env):
+        cfg, pings, mp = env
+        mp.setattr(run_module, "Broker", lambda *a, **k: FakeBroker(market_open=False))
+        run_module.main()
+        body = pings.ok_calls[0][1]
+        assert "SPY 1h" in body
+        assert "market closed" in body
+        assert "Z" in body                      # timestamp present
+
+    def test_failure_body_leads_with_the_error_not_the_traceback(self, env):
+        cfg, pings, mp = env
+
+        def boom(_):
+            raise RuntimeError("alpaca is down")
+
+        mp.setattr(run_module, "get_bars", boom)
+        mp.setattr(run_module, "Broker", lambda *a, **k: FakeBroker())
+        run_module.main()
+        body = pings.fail_calls[0][1]
+        first_line = body.splitlines()[0]
+        # "Traceback (most recent call last):" as a subject line is useless.
+        assert first_line.startswith("FAILED: RuntimeError: alpaca is down")
+        assert "SPY 1h" in first_line
+        assert "Traceback" in body              # full detail still included
+
+    def test_body_is_sent_even_with_no_detail(self, env):
+        cfg, pings, mp = env
+        mp.setattr(run_module, "Broker", lambda *a, **k: FakeBroker(market_open=False))
+        run_module.main()
+        assert pings.ok_calls[0][1].strip() != ""

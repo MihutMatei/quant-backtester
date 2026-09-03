@@ -327,13 +327,25 @@ Do-nothing runs ping too. A run that correctly decided to stay flat is a
 healthy run, and staying quiet would make a slow market indistinguishable from
 a dead bot.
 
-The summary line is sent as the POST body, so the check's history reads as an
-hour-by-hour record of what the bot decided:
+The POST body is what healthchecks.io shows in the check history and in the
+alert mail, so it leads with a line that stands on its own:
 
 ```
-no action | rsi 72.8 signal 0 position 0.0000 equity 99,999.98
-buy 64.7000 SPY @ 772.88 | rsi 43.1 equity 100,000.00 order 30e5d8cd
+no action | rsi 72.8 signal 0 position 0.0000 equity 99,999.98 | SPY 1h | 2026-09-03 18:05:12Z
+
+FAILED: RuntimeError: alpaca is down | SPY 1h | 2026-09-03 18:05:12Z
+Traceback (most recent call last):
+  ...
 ```
+
+A raw traceback starts with `Traceback (most recent call last):`, which tells
+you nothing about which bot, which symbol, or when - so the failure body leads
+with the exception type and message and keeps the traceback underneath.
+
+Note what the body says in each alert. A `/fail` ping trips the check
+immediately and the body is that run's traceback. A silence alert means no ping
+arrived at all, so the newest body is the *last healthy run* - which is the
+useful context: what it was doing before it went quiet.
 
 ---
 

@@ -35,6 +35,19 @@ def setup_logging():
     )
 
 
+def _body(config, headline, detail=""):
+    """Build the heartbeat POST body.
+
+    healthchecks.io shows this in the check history and in the alert mail, so
+    it leads with a line that is readable on a phone. A raw traceback starts
+    with "Traceback (most recent call last):", which says nothing about which
+    bot, which symbol, or when.
+    """
+    header = (f"{headline} | {config.symbol} {config.interval} | "
+              f"{datetime.now(UTC):%Y-%m-%d %H:%M:%SZ}")
+    return f"{header}\n{detail}" if detail else header
+
+
 def run_once(config):
     """Do the work for one bar. Returns a one-line summary, or raises."""
     broker = Broker(config.api_key, config.api_secret,
@@ -95,13 +108,17 @@ def main():
 
     try:
         summary = run_once(config)
-    except Exception:
+    except Exception as exc:
         log.exception("run failed")
-        heartbeat.fail(config.heartbeat_url, traceback.format_exc())
+        heartbeat.fail(config.heartbeat_url, _body(
+            config,
+            f"FAILED: {type(exc).__name__}: {exc}",
+            traceback.format_exc(),
+        ))
         return 1
 
     log.info(summary)
-    heartbeat.ok(config.heartbeat_url, summary)
+    heartbeat.ok(config.heartbeat_url, _body(config, summary))
     return 0
 
 
