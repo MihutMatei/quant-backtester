@@ -10,17 +10,16 @@ bot/broker.py and bot/orders.py are being written against:
   * which data feed the account is entitled to
   * the real research/bot data path (fetch_alpaca) returns session-filtered
     bars that satisfy the core.frames contract
-  * optionally, that a live order can be submitted and cancelled
 
 Severity: FAIL blocks the bot. warn is a real constraint to design around.
 info is context, not a problem.
 
-Usage:
-    python scripts/check_alpaca.py [SYMBOL] [--interval 1h] [--order]
-                                   [--compare-yfinance]
+This script is read-only: it never submits an order. The submit/cancel round
+trip was verified once against the paper account; bot.run is the only code path
+that places orders.
 
---order submits a limit order at half the market price - not marketable, so it
-cannot fill - and cancels it, proving the submit/cancel round trip.
+Usage:
+    python scripts/check_alpaca.py [SYMBOL] [--interval 1h] [--compare-yfinance]
 """
 import argparse
 import os
@@ -220,31 +219,11 @@ def compare_yfinance(symbol, interval, df, lookback_days):
              "why DATA_SOURCE defaults to alpaca for both backtest and bot")
 
 
-def check_order(trading, symbol, df):
-    from alpaca.common.exceptions import APIError
-    from alpaca.trading.enums import OrderSide, TimeInForce
-    from alpaca.trading.requests import LimitOrderRequest
-
-    header("Order round trip")
-    try:
-        limit = round(float(df["Close"].iloc[-1]) * 0.5, 2)
-        order = trading.submit_order(LimitOrderRequest(
-            symbol=symbol, qty=1, side=OrderSide.BUY,
-            time_in_force=TimeInForce.DAY, limit_price=limit))
-        line(OK, "order submitted", f"id {order.id} limit ${limit} (cannot fill)")
-        trading.cancel_order_by_id(order.id)
-        line(OK, "order cancelled", "submit/cancel round trip works")
-    except APIError as exc:
-        line(FAIL, "order round trip failed", str(exc)[:120])
-
-
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("symbol", nargs="?", default="SPY")
     ap.add_argument("--interval", default="1h")
     ap.add_argument("--lookback-days", type=int, default=10)
-    ap.add_argument("--order", action="store_true",
-                    help="submit and cancel a non-marketable limit order")
     ap.add_argument("--compare-yfinance", action="store_true",
                     help="report how Alpaca and yfinance bars differ")
     args = ap.parse_args()
@@ -277,12 +256,6 @@ def main():
 
     if args.compare_yfinance:
         compare_yfinance(args.symbol, args.interval, df, args.lookback_days)
-
-    if args.order:
-        check_order(trading, args.symbol, df)
-    else:
-        header("Order round trip")
-        line(INFO, "not tested", "pass --order to exercise submit/cancel")
 
     header("Summary")
     if _failures:

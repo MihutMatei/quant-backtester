@@ -202,13 +202,16 @@ BOT_DRY_RUN=1 python -m bot.run    # decide and log, submit nothing
 python -m bot.run                  # live one-shot against the paper account
 ```
 
+`bot.run` is the only code path that submits orders. `scripts/check_alpaca.py`
+is read-only.
+
 | variable | default | |
 |---|---|---|
 | `BOT_SYMBOL` | `SPY` | |
 | `BOT_INTERVAL` | `1h` | |
 | `BOT_NOTIONAL` | `50000` | dollars per entry |
-| `BOT_RSI_PERIOD` / `BOT_RSI_BUY` | `14` / `50` | long while RSI <= buy |
-| `BOT_RSI_SELL` | `70` | **inert while long-only** - see below |
+| `BOT_RSI_PERIOD` | `14` | |
+| `BOT_RSI_BUY` / `BOT_RSI_SELL` | `45` / `50` | enter at or below buy, exit at or above sell |
 | `BOT_LOOKBACK_DAYS` | `10` | ~60 session bars |
 | `BOT_FEED` | `sip` | |
 | `BOT_DB_PATH` | `data/bot.db` | `/app/data/bot.db` in the image |
@@ -224,13 +227,17 @@ manual intervention, leaving two sources of truth. The `bar_ts` primary key is
 what makes re-running a bar a no-op, so an overlapping schedule or a manual
 re-invocation cannot double-trade.
 
-**The sell threshold does nothing in long-only mode.** Overbought maps to -1,
-which then clips to 0 - the same value the neutral band already gives - so the
-position is held exactly while RSI <= `BOT_RSI_BUY`, and that one number
-controls both entry and exit. This is not an enter-at-30 / exit-at-70 system.
-`BOT_RSI_BUY` defaults to 50 (roughly the median hourly RSI) to produce a few
-round trips a week; at 30 the strategy is in the market under 10% of the time
-and would likely trade once or not at all over a one-week window.
+**Entry and exit are a band, not a threshold.** The bot enters when RSI falls to
+`BOT_RSI_BUY`, holds through the middle, and exits when RSI reaches
+`BOT_RSI_SELL`. Holding through the middle is what makes the exit threshold
+meaningful; without it a single number would control both ends.
+
+Defaults of 45/50 are chosen for trade frequency, not returns. On 60 days of
+SPY hourly bars they give roughly 1.6 round trips a week, against 0.4 for the
+textbook 30/70 - which over a one-week window would likely produce no trades at
+all and nothing to compare. Widening the band trades less and holds longer;
+`long_only=False` keeps the older stateless two-sided mapping so previous
+backtests still reproduce.
 
 **Closed bars only.** Alpaca stamps a bar at its start and serves it while it is
 still forming, so `bot.data.drop_unclosed` discards any bar whose interval has

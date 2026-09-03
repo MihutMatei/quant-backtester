@@ -25,13 +25,9 @@ class TestLongOnly:
         sig = rsi_signals(oscillating_frame(), long_only=False)["signal"]
         assert -1.0 in set(sig.unique())
 
-    def test_long_only_maps_short_to_flat_not_to_long(self):
+    def test_long_only_never_goes_short(self):
         df = oscillating_frame()
-        two = rsi_signals(df, long_only=False)["signal"]
-        one = rsi_signals(df, long_only=True)["signal"]
-        # every -1 becomes 0; every other value is untouched
-        assert (one[two == -1.0] == 0.0).all()
-        assert (one[two != -1.0] == two[two != -1.0]).all()
+        assert (rsi_signals(df, long_only=True)["signal"] >= 0).all()
 
     def test_positions_derived_after_the_clip(self):
         out = rsi_signals(oscillating_frame())
@@ -39,31 +35,49 @@ class TestLongOnly:
             out["positions"], out["signal"].diff(), check_names=False)
 
 
-class TestSellThresholdIsInertWhenLongOnly:
-    """A trap worth pinning: the sell threshold does nothing in long_only mode.
+class TestHysteresis:
+    """long_only is a stateful band: enter at buy, hold, exit at sell."""
 
-    Overbought maps to -1 and clips to 0 - the same value the neutral band
-    gives - so buy_threshold alone controls entry and exit.
-    """
-
-    def test_sell_threshold_does_not_change_the_signal(self):
+    def test_sell_threshold_changes_the_signal(self):
+        # This is the whole point of the band; it used to be inert.
         df = oscillating_frame()
-        base = rsi_signals(df, 14, 50, 70)["signal"]
-        for sell in (55, 90, 99):
-            pd.testing.assert_series_equal(
-                rsi_signals(df, 14, 50, sell)["signal"], base)
+        base = rsi_signals(df, 14, 45, 50)["signal"]
+        assert not rsi_signals(df, 14, 45, 70)["signal"].equals(base)
 
-    def test_but_it_matters_two_sided(self):
-        df = oscillating_frame()
-        a = rsi_signals(df, 14, 50, 55, long_only=False)["signal"]
-        b = rsi_signals(df, 14, 50, 90, long_only=False)["signal"]
-        assert not a.equals(b)
+    def test_entry_when_rsi_at_or_below_buy(self):
+        out = rsi_signals(oscillating_frame(), 14, 45, 55).iloc[15:]
+        assert (out.loc[out["rsi"] <= 45, "signal"] == 1.0).all()
 
-    def test_position_is_held_exactly_while_rsi_is_below_buy(self):
+    def test_exit_when_rsi_at_or_above_sell(self):
+        out = rsi_signals(oscillating_frame(), 14, 45, 55).iloc[15:]
+        assert (out.loc[out["rsi"] >= 55, "signal"] == 0.0).all()
+
+    def test_position_is_held_through_the_middle_band(self):
+        """The carry is what distinguishes a band from a threshold."""
         df = oscillating_frame()
-        out = rsi_signals(df, 14, 50, 70).iloc[15:]
-        expected = (out["rsi"] <= 50).astype(float)
-        pd.testing.assert_series_equal(out["signal"], expected, check_names=False)
+        out = rsi_signals(df, 14, 45, 55).iloc[15:]
+        middle = out[(out["rsi"] > 45) & (out["rsi"] < 55)]
+        # in the middle band the signal must equal the previous bar's
+        prev = out["signal"].shift(1).loc[middle.index]
+        pd.testing.assert_series_equal(middle["signal"], prev, check_names=False)
+
+    def test_a_wider_band_holds_longer(self):
+        df = oscillating_frame()
+        narrow = rsi_signals(df, 14, 45, 50)["signal"]
+        wide = rsi_signals(df, 14, 45, 70)["signal"]
+        assert wide.mean() > narrow.mean()
+        assert wide.diff().abs().sum() < narrow.diff().abs().sum()
+
+    def test_starts_flat_before_any_entry(self):
+        assert rsi_signals(oscillating_frame(), 14, 45, 50)["signal"].iloc[0] == 0.0
+
+    def test_two_sided_remains_stateless(self):
+        """long_only=False must still reproduce the old research behaviour."""
+        df = oscillating_frame()
+        out = rsi_signals(df, 14, 30, 70, long_only=False).iloc[15:]
+        expected = np.where(out["rsi"] <= 30, 1.0,
+                            np.where(out["rsi"] >= 70, -1.0, 0.0))
+        assert (out["signal"].values == expected).all()
 
 
 class TestContract:
@@ -75,10 +89,10 @@ class TestContract:
         # bot/run.py reads exactly this
         assert rsi_signals(oscillating_frame())["signal"].iloc[-1] in (0.0, 1.0)
 
-    def test_thresholds_are_respected(self):
+    def test_entry_threshold_is_respected(self):
         df = oscillating_frame()
-        out = rsi_signals(df, period=14, buy_threshold=30, sell_threshold=70)
-        warm = out.iloc[15:]
+        warm = rsi_signals(df, period=14, buy_threshold=30,
+                           sell_threshold=70).iloc[15:]
         assert (warm.loc[warm["rsi"] <= 30, "signal"] == 1.0).all()
 
     def test_rsi_is_scale_invariant(self):

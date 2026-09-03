@@ -9,20 +9,16 @@ import pandas as pd
 def rsi_signals(df, period=14, buy_threshold=30, sell_threshold=70,
                 long_only=True):
     """
-    Pure RSI strategy signals
+    RSI strategy signals.
 
-    Buy when RSI <= buy_threshold (oversold)
-    Sell when RSI >= sell_threshold (overbought)
+    long_only=True (the default, and what the bot runs) is a stateful band:
+    enter long when RSI <= buy_threshold, hold through the middle, exit to flat
+    when RSI >= sell_threshold. Both thresholds matter, and the signal is
+    {0, 1}. Entry dominates on a bar that somehow satisfies both.
 
-    With long_only (the default), the short leg is mapped to flat so the
-    signal is {0, 1}. Pass long_only=False to reproduce the two-sided
-    research behaviour.
-
-    NOTE: sell_threshold has no effect when long_only=True. Overbought maps to
-    -1 and then clips to 0, which is the same value the neutral band already
-    produces, so the position is held exactly while RSI <= buy_threshold and
-    buy_threshold alone controls both entry and exit. It is not an
-    enter-at-30 / exit-at-70 system. sell_threshold only bites two-sided.
+    long_only=False keeps the original stateless two-sided mapping used by the
+    earlier research: +1 oversold, -1 overbought, 0 in between, with no memory
+    of the previous bar. Preserved so old backtests still reproduce.
     """
     signals = pd.DataFrame(index=df.index)
     signals['signal'] = 0.0
@@ -38,15 +34,22 @@ def rsi_signals(df, period=14, buy_threshold=30, sell_threshold=70,
     rs = avg_gain / avg_loss
     signals['rsi'] = 100 - (100 / (1 + rs))
 
-    # Generate signals using the consistent indexing pattern
-    signals.loc[signals.index[period:], 'signal'] = np.where(
-        signals['rsi'][period:] <= buy_threshold, 1.0,
-        np.where(signals['rsi'][period:] >= sell_threshold, -1.0, 0.0)
-    )
+    warm = signals['rsi'].iloc[period:]
 
     if long_only:
-        # -1 (short) becomes 0 (flat); positions must be derived after this.
-        signals['signal'] = signals['signal'].clip(lower=0.0)
+        # Stateful band. NaN means "no instruction on this bar", so the
+        # forward-fill carries the previous position through the middle - that
+        # carry is what makes sell_threshold an exit rather than dead config.
+        instruction = np.where(warm <= buy_threshold, 1.0,
+                               np.where(warm >= sell_threshold, 0.0, np.nan))
+        held = pd.Series(instruction, index=warm.index).ffill().fillna(0.0)
+        signals.loc[warm.index, 'signal'] = held
+    else:
+        # Stateless two-sided: each bar judged on its own.
+        signals.loc[warm.index, 'signal'] = np.where(
+            warm <= buy_threshold, 1.0,
+            np.where(warm >= sell_threshold, -1.0, 0.0)
+        )
 
     signals['positions'] = signals['signal'].diff()
 
