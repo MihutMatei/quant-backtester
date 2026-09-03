@@ -259,6 +259,112 @@ sudo deploy/install.sh          # writes /etc/quant-bot/env on first run
 sudo deploy/install.sh
 ```
 
+### First deployment to EC2
+
+Instance: `t3.micro`, Ubuntu Server 24.04 LTS, **16 GiB** gp3. The 8 GiB default
+is too tight once the image, Docker's overlay store and OS updates are on it.
+
+Security group: **one** inbound rule, SSH on 22 from your own address. The bot
+only makes outbound connections, so nothing needs to reach in. Never open 22 to
+`0.0.0.0/0`.
+
+**On your machine**
+
+```
+chmod 400 ~/.ssh/bot-control.pem
+export KEY=~/.ssh/bot-control.pem EC2=ubuntu@<public-ip>
+
+scp -i "$KEY" .env "$EC2":~/bot.env     # copy, don't retype a 40-char secret
+ssh -i "$KEY" "$EC2"
+```
+
+The code is cloned from GitHub on the box, not copied from the laptop.
+
+**On the server**
+
+```
+# 1. Swap first: 1 GB RAM plus `pip install pandas` is an OOM waiting to happen,
+#    and it presents as a confusing random build failure.
+sudo fallocate -l 2G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile && sudo swapon /swapfile
+printf '/swapfile none swap sw 0 0\n' | sudo tee -a /etc/fstab
+sudo findmnt --verify            # parse fstab the way boot will, before trusting it
+
+# 2. Docker
+sudo apt update && sudo apt upgrade -y
+sudo apt install -y docker.io git
+sudo systemctl enable --now docker
+sudo usermod -aG docker ubuntu
+sudo reboot                      # picks up the group change and any new kernel
+
+# 3. Clone and build (a few minutes on a micro)
+git clone https://github.com/MihutMatei/quant-backtester.git
+cd quant-backtester
+docker build -t quant-bot:latest .
+docker run --rm quant-bot:latest python -c "import core.signals, bot.run; print('ok')"
+
+# 4. Credentials
+sudo install -d -m 0750 /etc/quant-bot
+sudo install -m 0600 ~/bot.env /etc/quant-bot/env
+shred -u ~/bot.env
+
+# 5. Install and start
+sudo deploy/install.sh
+
+# 6. Verify
+systemctl is-enabled quant-bot.timer     # "enabled" - survives reboot
+systemctl list-timers quant-bot.timer
+sudo systemctl start quant-bot.service   # run one bar now
+journalctl -u quant-bot -n 20 --no-pager
+systemctl list-units --failed            # want an empty list
+sudo grep -c '^BOT_HEARTBEAT_URL=.\+' /etc/quant-bot/env   # want 1, not 0
+```
+
+That last check matters more than it looks: an unset heartbeat URL is a silent
+no-op by design, so the logs cannot tell you it is missing. Confirm the check
+went green on healthchecks.io rather than inferring it from a clean run.
+
+### After a reboot
+
+Nothing. The timer is enabled, so systemd arms it at boot. With
+`Persistent=true` a run may fire on its own within a minute if the reboot
+spanned a scheduled `:05`.
+
+A manual `systemctl start quant-bot.service` right after a reboot usually logs
+`bar ... already handled; nothing to do` - the state volume survived, so the
+bar was already processed. That is the idempotency guard working, not a fault.
+For a full decision without touching state, run dry against an empty database:
+
+```
+docker run --rm --env-file /etc/quant-bot/env -e BOT_DRY_RUN=1 quant-bot:latest
+```
+
+### Deploying a change
+
+```
+cd ~/quant-backtester && git pull && docker build -t quant-bot:latest .
+```
+
+The next timer fire picks up the new image. **Nothing rebuilds automatically** -
+a `git pull` without a rebuild silently keeps running the old strategy, which is
+easy to do and hard to notice.
+
+### Troubleshooting
+
+| symptom | cause |
+|---|---|
+| `ssh: Connection timed out` | security group drops the packets - your address changed. `deploy/allow-my-ip.sh` |
+| `ssh: Connection refused` | packets arrive, nothing listening - wrong IP, or sshd down |
+| `swapon failed: Read-only file system` | the swap unit ran before the root fs was remounted rw |
+| `What= path is not absolute, ignoring: swapfile` | the fstab entry is missing its leading `/`. Must be `/swapfile`, not `swapfile` |
+| `docker: permission denied` | the `docker` group has not applied to this shell yet - log out and back in, or `newgrp docker` |
+| bot logs `already handled` | correct: that bar was processed. Waits for the next close |
+
+Edit `/etc/fstab` carefully and run `sudo findmnt --verify` before rebooting. A
+broken entry can stop the instance booting, and recovering that means detaching
+the volume and attaching it to a second instance.
+
 | file | |
 |---|---|
 | `deploy/quant-bot.service` | one `docker run`, `Type=oneshot` |
