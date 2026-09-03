@@ -371,14 +371,49 @@ the volume and attaching it to a second instance.
 | `deploy/quant-bot.timer` | fires at `*:05:00`, `Persistent=true` |
 | `deploy/quant-bot-failure@.service` | `OnFailure=` hook - add a real notifier here |
 | `deploy/allow-my-ip.sh` | repoint the SSH rule after changing networks |
+| `deploy/botctl.sh` | day-to-day operation - status, logs, pause, update |
+
+### Operating it
+
+`deploy/botctl.sh` wraps the day-to-day commands:
+
+```
+deploy/botctl.sh status     # timer state, next fire, last run, recent decisions
+deploy/botctl.sh logs       # follow the journal
+deploy/botctl.sh history    # every decision so far
+deploy/botctl.sh run        # run one bar now (real)
+deploy/botctl.sh dry        # evaluate now without trading or pinging
+deploy/botctl.sh state      # trade log and equity points from SQLite
+deploy/botctl.sh pause      # stop the timer - no further trading
+deploy/botctl.sh resume     # start it again
+deploy/botctl.sh reload     # after editing deploy/*.service|timer
+deploy/botctl.sh update     # git pull, rebuild, re-arm
+```
+
+Or the underlying systemd commands directly:
 
 ```
 journalctl -u quant-bot -f            # the trade log
 systemctl list-timers quant-bot.timer # when it next fires
 systemctl list-units --failed         # did anything break
-systemctl start quant-bot.service     # run one bar now
-systemctl disable --now quant-bot.timer
+sudo systemctl start quant-bot.service   # run one bar now
+sudo systemctl disable --now quant-bot.timer
 ```
+
+There is no long-running process to keep alive. The timer holds the schedule
+and the service does one bar's work and exits, so "restarting the bot" means
+reloading the units and re-arming the timer - which is what `reload` does.
+Restarting a `Type=oneshot` service just runs it once more.
+
+**`pause` does not close anything.** If the bot is holding a position when you
+stop the timer, that position stays open and unmanaged: the exit signal cannot
+fire while nothing is evaluating bars. Check `botctl.sh state` before pausing
+for any length of time.
+
+**`dry` blanks `BOT_HEARTBEAT_URL` and mounts no volume.** A diagnostic run
+should not touch the monitoring signal - a ping from a manual test would mask a
+genuinely dead scheduler - and skipping the volume means the idempotency guard
+cannot suppress the decision you are trying to see.
 
 **SSH access from a changing address.** The security group allows port 22 from
 one address. After moving between networks, `deploy/allow-my-ip.sh <sg-id>`
