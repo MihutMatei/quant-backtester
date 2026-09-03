@@ -204,8 +204,8 @@ def backtest_strategy(df, signals, initial_capital=10000.0, log_transactions=Tru
                 
                 pnl_pct = pnl / (position_entry_price * abs(shares)) * 100
                 
+                action = f"{exit_reason}_{position_type.upper()}"
                 if log_transactions:
-                    action = f"{exit_reason}_{position_type.upper()}"
                     transactions.append({
                         'Date': date,
                         'Action': action,
@@ -215,7 +215,7 @@ def backtest_strategy(df, signals, initial_capital=10000.0, log_transactions=Tru
                         'Return': pnl_pct,
                         'Portfolio_Value': cash
                     })
-                    record_transaction(action, date)
+                record_transaction(action, date)
                 
                 shares = 0.0
                 position_entry_price = None
@@ -247,7 +247,7 @@ def backtest_strategy(df, signals, initial_capital=10000.0, log_transactions=Tru
                             'Return': 0.0,
                             'Portfolio_Value': shares * current_price
                         })
-                        record_transaction('BUY', date)
+                    record_transaction('BUY', date)
             
             elif current_signal == -1.0 and shares > 0:  # Sell signal when in long position
                 if should_allow_transaction('SELL', date):
@@ -267,7 +267,7 @@ def backtest_strategy(df, signals, initial_capital=10000.0, log_transactions=Tru
                             'Return': pnl_pct,
                             'Portfolio_Value': cash
                         })
-                        record_transaction('SELL', date)
+                    record_transaction('SELL', date)
                     
                     shares = 0.0
                     position_entry_price = None
@@ -298,7 +298,7 @@ def backtest_strategy(df, signals, initial_capital=10000.0, log_transactions=Tru
                                 'Return': 0.0,
                                 'Portfolio_Value': cash
                             })
-                            record_transaction('SHORT', date)
+                        record_transaction('SHORT', date)
             
             elif current_signal == -1.0 and shares == 0 and enable_shorting:  # Short signal when not in position
                 if cash > 0 and should_allow_transaction('SHORT', date):
@@ -322,7 +322,7 @@ def backtest_strategy(df, signals, initial_capital=10000.0, log_transactions=Tru
                             'Return': 0.0,
                             'Portfolio_Value': cash
                         })
-                        record_transaction('SHORT', date)
+                    record_transaction('SHORT', date)
             
             elif current_signal == 1.0 and shares < 0:  # Buy signal when in short position (cover)
                 if should_allow_transaction('COVER', date):
@@ -343,7 +343,7 @@ def backtest_strategy(df, signals, initial_capital=10000.0, log_transactions=Tru
                             'Return': pnl_pct,
                             'Portfolio_Value': cash
                         })
-                        record_transaction('COVER', date)
+                    record_transaction('COVER', date)
                     
                     shares = 0.0
                     position_entry_price = None
@@ -373,7 +373,7 @@ def backtest_strategy(df, signals, initial_capital=10000.0, log_transactions=Tru
                                 'Return': 0.0,
                                 'Portfolio_Value': shares * current_price
                             })
-                            record_transaction('BUY', date)
+                        record_transaction('BUY', date)
             
             elif current_signal == 0.0 and shares > 0:  # Exit signal when in long position
                 if should_allow_transaction('EXIT_LONG', date):
@@ -393,7 +393,7 @@ def backtest_strategy(df, signals, initial_capital=10000.0, log_transactions=Tru
                             'Return': pnl_pct,
                             'Portfolio_Value': cash
                         })
-                        record_transaction('EXIT_LONG', date)
+                    record_transaction('EXIT_LONG', date)
                     
                     shares = 0.0
                     position_entry_price = None
@@ -417,7 +417,7 @@ def backtest_strategy(df, signals, initial_capital=10000.0, log_transactions=Tru
                             'Return': pnl_pct,
                             'Portfolio_Value': cash + pnl
                         })
-                        record_transaction('EXIT_SHORT', date)
+                    record_transaction('EXIT_SHORT', date)
                     
                     # Update cash to reflect the PnL from the short position
                     cash = cash + pnl
@@ -426,7 +426,6 @@ def backtest_strategy(df, signals, initial_capital=10000.0, log_transactions=Tru
                     position_entry_date = None
                     trailing_stop_price = None
                     position_type = None
-                position_type = None
         
         # Update portfolio tracking
         portfolio.loc[date, 'cash'] = float(cash)
