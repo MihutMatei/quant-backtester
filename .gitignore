@@ -208,5 +208,9 @@ __marimo__/
 
 *.csv
 *.png
-*.txt
+
+# Generated artifacts and personal notes (a blanket *.txt would also
+# swallow the requirements-*.txt files).
+transactions.txt
+todo.txt
 PROJECT.MD

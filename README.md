@@ -17,7 +17,7 @@ This project provides an end-to-end pipeline: data fetching, signal generation, 
 
   * **Moving Average Crossover** (trend-following).
   * **Mean Reversion** (z-score based).
-  * Easy to extend with custom strategies via `signals.py`.
+  * Easy to extend with custom strategies via `core/signals.py`.
 
 * **Backtesting**
 
@@ -47,11 +47,26 @@ This project provides an end-to-end pipeline: data fetching, signal generation, 
 
 The project is organized into modular components to make it easy to extend and maintain:
 
-* **`main.py`** – Entry point of the application.
-* **`backtest.py`** – Core backtesting engine with performance metrics and plotting.
-* **`data_fetcher.py`** – Data retrieval and preprocessing via yfinance.
-* **`strategy.py`** – High-level strategy definitions.
-* **`signals.py`** – Signal-generation logic (e.g., moving averages, mean reversion).
+The tree is split by dependency weight, so the deployable bot never pulls in the
+research stack:
+
+**`core/`** – shared by the backtester and the live bot; pandas only.
+
+* **`core/frames.py`** – OHLCV normalization and validation. One shape for every data source.
+* **`core/signals.py`** – Signal logic used in production (RSI). `signal.iloc[-1]` is the position to hold after that bar closes.
+* **`core/metrics.py`** – CAGR, Sharpe, max drawdown, total return, with interval-aware annualization.
+
+**`research/`** – backtesting and plotting; local only, pulls in yfinance + matplotlib.
+
+* **`research/run_backtest.py`** – Entry point; all configuration lives at the top.
+* **`research/backtest.py`** – Simulation loop with stops, spread, and execution lag.
+* **`research/plotting.py`** – Portfolio vs. buy-and-hold plots.
+* **`research/legacy_signals.py`** – Earlier custom strategies (Williams %R, mean reversion, combined).
+* **`research/strategies.py`** – Fetch-plus-signal glue.
+* **`research/data_fetcher.py`** – yfinance retrieval.
+* **`research/analysis.py`** – Trade-log statistics.
+
+**`bot/`** – live paper trading against Alpaca. Currently stubs.
 
 ---
 
@@ -75,52 +90,49 @@ The project is organized into modular components to make it easy to extend and m
 3. **Install dependencies**
 
    ```
-   pip install -r requirements.txt
+   pip install -r requirements-dev.txt
    ```
 
-   If a `requirements.txt` file is not available, install manually:
-
-   ```
-   pip install pandas numpy matplotlib yfinance
-   ```
+   Or run `./setup.sh`, which creates the venv and rebuilds it if a Python
+   upgrade has broken it.
 
 4. **Verify installation**
    Run the script with default configuration to check everything is working:
 
    ```
-   python main.py
+   python -m research.run_backtest
    ```
 
 ---
 
-## Requirements File (`requirements.txt`)
+## Requirements
 
-A sample `requirements.txt` is provided below for convenience:
+Dependencies are split by target so the deployed image stays small:
 
-```
-pandas>=2.0.0
-numpy>=1.25.0
-matplotlib>=3.7.0
-yfinance>=0.2.30
-```
+* **`requirements-bot.txt`** – `alpaca-py`, `pandas`, `numpy`. This set defines the
+  Docker image and must never pull in matplotlib or yfinance (~178 MB installed).
+* **`requirements-research.txt`** – the above plus `matplotlib` and `yfinance`, for
+  backtesting locally.
+* **`requirements-dev.txt`** – the above plus `pytest` and `ruff`, which CI runs.
 
 ---
 
 ## Usage
 
-1. **Configure parameters** in `main.py`
+1. **Configure parameters** at the top of `research/run_backtest.py`
 
    ```
-   TICKER = 'PLTR'
-   PERIOD = "60d"
+   TICKER = 'PLNT'
+   PERIOD = "30d"
    INTERVAL = "5m"
-   STRATEGY = 1  # 1 = mean reversion, 2 = moving average
+   STRATEGY = 3        # 1=mean reversion, 2=moving average, 3=Williams %R, 4=combined, 5=RSI
+   EXECUTION_LAG = 1   # bars between signal and fill; 0 restores same-bar close fills
    ```
 
-2. **Run the backtest**
+2. **Run the backtest** from the repository root
 
    ```
-   python main.py
+   python -m research.run_backtest
    ```
 
 3. **View results**
@@ -133,8 +145,12 @@ yfinance>=0.2.30
 
 ## Extending
 
-* Add new signal-generation logic in `signals.py`.
-* Wrap into a strategy in `strategy.py`.
-* Reuse the same `backtest.py` pipeline for consistent evaluation.
+* Add signal logic to `core/signals.py` if the bot should trade it, or
+  `research/legacy_signals.py` if it is research only.
+* Wrap it into a strategy in `research/strategies.py`.
+* Reuse `research/backtest.py` for consistent evaluation.
+
+Anything imported by `core/` ends up in the deployed image, so keep it free of
+matplotlib and yfinance.
 
 ---

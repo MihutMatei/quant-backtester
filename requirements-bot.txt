@@ -1,0 +1,5 @@
+# Deployed bot only. Kept deliberately small - this set defines the Docker image.
+# Nothing here may pull in matplotlib or yfinance.
+alpaca-py==0.44.0
+numpy==2.5.2
+pandas==3.0.5

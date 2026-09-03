@@ -1,0 +1,4 @@
+# Backtesting and plotting. Local development only; never copied into the image.
+-r requirements-bot.txt
+matplotlib==3.11.1
+yfinance==1.7.0
