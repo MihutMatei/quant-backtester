@@ -207,7 +207,8 @@ python -m bot.run                  # live one-shot against the paper account
 | `BOT_SYMBOL` | `SPY` | |
 | `BOT_INTERVAL` | `1h` | |
 | `BOT_NOTIONAL` | `50000` | dollars per entry |
-| `BOT_RSI_PERIOD` / `BOT_RSI_BUY` / `BOT_RSI_SELL` | `14` / `30` / `70` | |
+| `BOT_RSI_PERIOD` / `BOT_RSI_BUY` | `14` / `50` | long while RSI <= buy |
+| `BOT_RSI_SELL` | `70` | **inert while long-only** - see below |
 | `BOT_LOOKBACK_DAYS` | `10` | ~60 session bars |
 | `BOT_FEED` | `sip` | |
 | `BOT_DB_PATH` | `data/bot.db` | `/app/data/bot.db` in the image |
@@ -222,6 +223,14 @@ Alpaca is authoritative for those, and a local copy drifts on partial fills or
 manual intervention, leaving two sources of truth. The `bar_ts` primary key is
 what makes re-running a bar a no-op, so an overlapping schedule or a manual
 re-invocation cannot double-trade.
+
+**The sell threshold does nothing in long-only mode.** Overbought maps to -1,
+which then clips to 0 - the same value the neutral band already gives - so the
+position is held exactly while RSI <= `BOT_RSI_BUY`, and that one number
+controls both entry and exit. This is not an enter-at-30 / exit-at-70 system.
+`BOT_RSI_BUY` defaults to 50 (roughly the median hourly RSI) to produce a few
+round trips a week; at 30 the strategy is in the market under 10% of the time
+and would likely trade once or not at all over a one-week window.
 
 **Closed bars only.** Alpaca stamps a bar at its start and serves it while it is
 still forming, so `bot.data.drop_unclosed` discards any bar whose interval has

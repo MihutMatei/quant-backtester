@@ -17,6 +17,12 @@ def rsi_signals(df, period=14, buy_threshold=30, sell_threshold=70,
     With long_only (the default), the short leg is mapped to flat so the
     signal is {0, 1}. Pass long_only=False to reproduce the two-sided
     research behaviour.
+
+    NOTE: sell_threshold has no effect when long_only=True. Overbought maps to
+    -1 and then clips to 0, which is the same value the neutral band already
+    produces, so the position is held exactly while RSI <= buy_threshold and
+    buy_threshold alone controls both entry and exit. It is not an
+    enter-at-30 / exit-at-70 system. sell_threshold only bites two-sided.
     """
     signals = pd.DataFrame(index=df.index)
     signals['signal'] = 0.0

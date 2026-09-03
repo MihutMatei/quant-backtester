@@ -39,6 +39,33 @@ class TestLongOnly:
             out["positions"], out["signal"].diff(), check_names=False)
 
 
+class TestSellThresholdIsInertWhenLongOnly:
+    """A trap worth pinning: the sell threshold does nothing in long_only mode.
+
+    Overbought maps to -1 and clips to 0 - the same value the neutral band
+    gives - so buy_threshold alone controls entry and exit.
+    """
+
+    def test_sell_threshold_does_not_change_the_signal(self):
+        df = oscillating_frame()
+        base = rsi_signals(df, 14, 50, 70)["signal"]
+        for sell in (55, 90, 99):
+            pd.testing.assert_series_equal(
+                rsi_signals(df, 14, 50, sell)["signal"], base)
+
+    def test_but_it_matters_two_sided(self):
+        df = oscillating_frame()
+        a = rsi_signals(df, 14, 50, 55, long_only=False)["signal"]
+        b = rsi_signals(df, 14, 50, 90, long_only=False)["signal"]
+        assert not a.equals(b)
+
+    def test_position_is_held_exactly_while_rsi_is_below_buy(self):
+        df = oscillating_frame()
+        out = rsi_signals(df, 14, 50, 70).iloc[15:]
+        expected = (out["rsi"] <= 50).astype(float)
+        pd.testing.assert_series_equal(out["signal"], expected, check_names=False)
+
+
 class TestContract:
     def test_index_is_preserved(self):
         df = oscillating_frame()

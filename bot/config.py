@@ -38,7 +38,7 @@ class BotConfig:
     interval: str = "1h"
     notional: float = 50_000.0
     rsi_period: int = 14
-    rsi_buy: float = 30.0
+    rsi_buy: float = 50.0
     rsi_sell: float = 70.0
     lookback_days: int = 10
     feed: str = "sip"
@@ -74,7 +74,7 @@ def load_config():
         interval=os.environ.get("BOT_INTERVAL", "1h"),
         notional=_env_float("BOT_NOTIONAL", 50_000.0),
         rsi_period=_env_int("BOT_RSI_PERIOD", 14),
-        rsi_buy=_env_float("BOT_RSI_BUY", 30.0),
+        rsi_buy=_env_float("BOT_RSI_BUY", 50.0),
         rsi_sell=_env_float("BOT_RSI_SELL", 70.0),
         lookback_days=_env_int("BOT_LOOKBACK_DAYS", 10),
         feed=os.environ.get("BOT_FEED", "sip").lower(),

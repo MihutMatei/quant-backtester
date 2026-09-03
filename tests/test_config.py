@@ -25,7 +25,7 @@ class TestDefaults:
         cfg = load_config()
         assert (cfg.symbol, cfg.interval) == ("SPY", "1h")
         assert cfg.notional == 50_000.0
-        assert (cfg.rsi_period, cfg.rsi_buy, cfg.rsi_sell) == (14, 30.0, 70.0)
+        assert (cfg.rsi_period, cfg.rsi_buy, cfg.rsi_sell) == (14, 50.0, 70.0)
         assert cfg.feed == "sip"
         assert cfg.dry_run is False
 
@@ -66,7 +66,7 @@ class TestValidation:
             load_config()
 
     def test_inverted_thresholds_rejected(self, env):
-        env.setenv("BOT_RSI_BUY", "80")
+        env.setenv("BOT_RSI_BUY", "90")
         with pytest.raises(ValueError, match="must be below"):
             load_config()
 
