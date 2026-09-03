@@ -1,6 +1,6 @@
 """Performance metrics. Shared by the backtester and the live bot."""
-import pandas as pd
 import numpy as np
+import pandas as pd
 
 TRADING_DAYS_PER_YEAR = 252
 

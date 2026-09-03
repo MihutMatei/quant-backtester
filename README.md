@@ -154,6 +154,39 @@ Dependencies are split by target so the deployed image stays small:
 
 ---
 
+## Tests and linting
+
+```
+pytest                                  # 51 tests over core/ and the backtest loop
+ruff check core bot tests scripts
+```
+
+`research/` is excluded from linting - it is prior research code kept for
+reference. CI runs both on every push.
+
+---
+
+## Docker
+
+The bot image carries only `core/` and `bot/`, built from `requirements-bot.txt`:
+
+```
+docker build -t quant-bot .
+docker run --rm --env-file .env quant-bot
+```
+
+~298 MB, runs as an unprivileged user, and contains no matplotlib, yfinance, or
+`.env`. CI asserts all three - if an import creeps into `core/` that drags in the
+research stack, the build fails rather than silently shipping ~144 MB more.
+
+Credentials are passed at runtime via `--env-file`; `.env` is in `.dockerignore`
+so it can never be baked into a layer.
+
+The container is one-shot: it evaluates the latest bar, acts, and exits.
+Scheduling is external (systemd timer or cron), so there is no daemon loop.
+
+---
+
 ## Extending
 
 * Add signal logic to `core/signals.py` if the bot should trade it, or

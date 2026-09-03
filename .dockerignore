@@ -1,0 +1,34 @@
+# Secrets must never enter an image layer.
+.env
+.envrc
+
+# Research stack: excluded by construction, not by discipline. Nothing under
+# core/ or bot/ may import these, and they are not copied in.
+research/
+tests/
+scripts/
+quantenv/
+.venv/
+
+# Repo and CI metadata
+.git/
+.github/
+.gitignore
+*.md
+PROJECT.MD
+LICENSE
+setup.sh
+
+# Generated artifacts
+*.png
+*.csv
+transactions.txt
+todo.txt
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Requirements for the other targets
+requirements-research.txt
+requirements-dev.txt

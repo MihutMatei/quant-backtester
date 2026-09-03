@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Lint
+        run: ruff check core bot tests scripts
+
+      - name: Test
+        run: pytest
+
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build bot image
+        run: docker build -t quant-bot:ci .
+
+      - name: Assert the research stack is absent
+        # The whole point of the core/bot/research split. If an import creeps
+        # into core/, the image silently grows ~144 MB and this fails loudly.
+        run: |
+          docker run --rm -i quant-bot:ci python - <<'PY'
+          import importlib.util as u, sys
+          leaked = [m for m in ("matplotlib", "yfinance", "curl_cffi", "PIL")
+                    if u.find_spec(m)]
+          if leaked:
+              sys.exit(f"research dependencies leaked into the bot image: {leaked}")
+          print("bot image is clean")
+          PY
+
+      - name: Smoke-test core inside the image
+        run: |
+          docker run --rm quant-bot:ci python -c "
+          import core.frames, core.signals, core.metrics, bot.run
+          print('core and bot import inside the image')"
+
+      - name: Assert no secrets in the image
+        run: |
+          if docker run --rm quant-bot:ci sh -c 'find / -name ".env" 2>/dev/null | head -1' | grep -q .; then
+            echo "a .env file is present in the image" && exit 1
+          fi
+          echo "no .env in the image"
