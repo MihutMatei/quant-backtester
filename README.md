@@ -430,7 +430,7 @@ the market is shut. An out-of-hours run costs one API call and exits 0.
 
 **`:05` and not `:00`.** The hourly bar closes exactly on the hour; firing on the
 boundary races its aggregation.
-
+<!-- 
 ---
 
 ## Extending
@@ -443,7 +443,7 @@ boundary races its aggregation.
 Anything imported by `core/` ends up in the deployed image, so keep it free of
 matplotlib and yfinance. CI will tell you if you forget.
 
----
+--- -->
 
 ## License
 
