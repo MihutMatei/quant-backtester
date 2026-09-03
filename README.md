@@ -226,7 +226,7 @@ scp -i "$KEY" .env "$EC2":~/bot.env     # copy rather than retype a 40-char secr
 ssh -i "$KEY" "$EC2"
 ```
 
-The code is cloned from GitHub on the box, not copied from the laptop.
+The code is cloned from GitHub on the box.
 
 ### On the server
 
