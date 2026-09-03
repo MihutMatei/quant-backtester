@@ -172,8 +172,12 @@ The bot image carries only `core/` and `bot/`, built from `requirements-bot.txt`
 
 ```
 docker build -t quant-bot .
-docker run --rm --env-file .env quant-bot
+docker run --rm --env-file .env -v botstate:/app/data quant-bot
 ```
+
+State lives in `/app/data`, owned by the runtime user (uid 10001). A **named
+volume** inherits that ownership automatically; a **host bind mount** must be
+chowned to `10001:10001` first or SQLite cannot create the database.
 
 ~298 MB, runs as an unprivileged user, and contains no matplotlib, yfinance, or
 `.env`. CI asserts all three - if an import creeps into `core/` that drags in the
@@ -184,6 +188,45 @@ so it can never be baked into a layer.
 
 The container is one-shot: it evaluates the latest bar, acts, and exits.
 Scheduling is external (systemd timer or cron), so there is no daemon loop.
+
+---
+
+## The bot
+
+One-shot: evaluates the latest *closed* bar, acts, exits. Exit 0 covers the
+common do-nothing cases (market closed, bar already handled, signal unchanged);
+non-zero means the run genuinely failed, so a scheduler can tell them apart.
+
+```
+BOT_DRY_RUN=1 python -m bot.run    # decide and log, submit nothing
+python -m bot.run                  # live one-shot against the paper account
+```
+
+| variable | default | |
+|---|---|---|
+| `BOT_SYMBOL` | `SPY` | |
+| `BOT_INTERVAL` | `1h` | |
+| `BOT_NOTIONAL` | `50000` | dollars per entry |
+| `BOT_RSI_PERIOD` / `BOT_RSI_BUY` / `BOT_RSI_SELL` | `14` / `30` / `70` | |
+| `BOT_LOOKBACK_DAYS` | `10` | ~60 session bars |
+| `BOT_FEED` | `sip` | |
+| `BOT_DB_PATH` | `data/bot.db` | `/app/data/bot.db` in the image |
+| `BOT_DRY_RUN` | `0` | |
+
+Credentials come from `APCA_API_KEY_ID` / `APCA_API_SECRET_KEY`, never from
+config files in the repo.
+
+**State.** SQLite records the trade log, an equity point per run, and which
+bars have been handled. It deliberately does *not* track positions or cash:
+Alpaca is authoritative for those, and a local copy drifts on partial fills or
+manual intervention, leaving two sources of truth. The `bar_ts` primary key is
+what makes re-running a bar a no-op, so an overlapping schedule or a manual
+re-invocation cannot double-trade.
+
+**Closed bars only.** Alpaca stamps a bar at its start and serves it while it is
+still forming, so `bot.data.drop_unclosed` discards any bar whose interval has
+not elapsed. Acting on a partial bar is a live-only failure the backtest cannot
+reproduce, because history contains only closed bars.
 
 ---
 

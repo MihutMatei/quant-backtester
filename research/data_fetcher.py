@@ -99,7 +99,7 @@ def get_data(ticker, source="yfinance", start_date=None, end_date=None,
     same bars the live bot will trade (regular session only by default).
     """
     if source == "alpaca":
-        from research.alpaca_data import fetch_alpaca
+        from core.alpaca_source import fetch_alpaca
         return fetch_alpaca(ticker, start_date=start_date, end_date=end_date,
                             period=period, interval=interval, **kwargs)
     if source != "yfinance":

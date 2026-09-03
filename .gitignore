@@ -214,3 +214,6 @@ __marimo__/
 transactions.txt
 todo.txt
 PROJECT.MD
+
+# Bot state database
+data/

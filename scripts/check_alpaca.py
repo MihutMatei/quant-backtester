@@ -136,7 +136,7 @@ def check_feeds(key, secret, symbol, interval, lookback_days):
     """Report entitlement. Differing bar counts are expected, not a problem."""
     from alpaca.common.exceptions import APIError
 
-    from research.alpaca_data import fetch_alpaca
+    from core.alpaca_source import fetch_alpaca
 
     header("Data feed entitlement")
     available = []
@@ -163,7 +163,7 @@ def check_feeds(key, secret, symbol, interval, lookback_days):
 
 def check_data_path(symbol, interval, feed, lookback_days):
     """Exercise the exact path research/ and bot/ use, not raw bars."""
-    from research.alpaca_data import fetch_alpaca
+    from core.alpaca_source import fetch_alpaca
 
     header("Data path: fetch_alpaca -> core.frames")
     df = fetch_alpaca(symbol, period=f"{lookback_days}d", interval=interval, feed=feed)

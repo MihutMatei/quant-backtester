@@ -6,7 +6,7 @@ bars instead of windows offset by 30 minutes.
 """
 import os
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from core.env import load_dotenv
 from core.frames import filter_regular_session, from_alpaca_bars, validate_ohlcv
@@ -62,10 +62,10 @@ def fetch_alpaca(ticker, start_date=None, end_date=None, period=None,
     if (start_date or end_date) and period:
         raise ValueError("Cannot specify both period and start/end dates")
 
-    end = (datetime.fromisoformat(end_date).replace(tzinfo=timezone.utc)
-           if end_date else datetime.now(timezone.utc) - _SIP_DELAY)
+    end = (datetime.fromisoformat(end_date).replace(tzinfo=UTC)
+           if end_date else datetime.now(UTC) - _SIP_DELAY)
     if start_date:
-        start = datetime.fromisoformat(start_date).replace(tzinfo=timezone.utc)
+        start = datetime.fromisoformat(start_date).replace(tzinfo=UTC)
     else:
         start = end - _period_to_timedelta(period or "30d")
 

@@ -20,6 +20,13 @@ WORKDIR /app
 COPY core/ ./core/
 COPY bot/ ./bot/
 
+# State lives here. Owned by the runtime user so a named volume inherits the
+# right ownership; a host bind mount must be chowned to 10001 on the host, or
+# SQLite cannot create the file.
+RUN mkdir -p /app/data && chown -R bot:bot /app/data
+VOLUME ["/app/data"]
+ENV BOT_DB_PATH=/app/data/bot.db
+
 ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
