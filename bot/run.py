@@ -1,15 +1,22 @@
 """Entrypoint: evaluate the latest closed bar, act once, exit.
 
-Invoked on a schedule (systemd timer or cron) rather than run as a daemon loop.
-Exit 0 means "ran correctly", including the common cases of nothing to do -
-market closed, bar already handled, signal unchanged. A non-zero exit means the
-run genuinely failed, so a scheduler can tell the two apart.
+Invoked on a schedule (systemd timer) rather than run as a daemon loop.
+
+Exit 0 means "ran correctly", including the common do-nothing cases - market
+closed, bar already handled, signal unchanged. A non-zero exit means the run
+genuinely failed, so systemd can tell the two apart and OnFailure only fires on
+real breakage.
+
+Every successful path pings the heartbeat, do-nothing cases included: a run
+that correctly decided to do nothing is a healthy run, and suppressing its ping
+would make a quiet market indistinguishable from a dead bot.
 """
 import logging
 import sys
+import traceback
 from datetime import UTC, datetime
 
-from bot import state
+from bot import heartbeat, state
 from bot.broker import Broker
 from bot.config import load_config
 from bot.data import get_bars
@@ -28,17 +35,13 @@ def setup_logging():
     )
 
 
-def main():
-    setup_logging()
-    config = load_config()
-    log.info("starting: %s", config)
-
+def run_once(config):
+    """Do the work for one bar. Returns a one-line summary, or raises."""
     broker = Broker(config.api_key, config.api_secret,
                     paper=True, dry_run=config.dry_run)
 
     if not broker.is_market_open():
-        log.info("market is closed; nothing to do")
-        return 0
+        return "market closed; nothing to do"
 
     bars = get_bars(config)
     bar_ts = bars.index[-1]
@@ -48,8 +51,7 @@ def main():
     conn = state.init_db(config.db_path)
 
     if state.already_acted_on(conn, bar_ts):
-        log.info("bar %s already handled; nothing to do", bar_ts)
-        return 0
+        return f"bar {bar_ts} already handled; nothing to do"
 
     signals = rsi_signals(bars, period=config.rsi_period,
                           buy_threshold=config.rsi_buy,
@@ -64,10 +66,10 @@ def main():
     intent = decide(position, signal, config.notional, price, symbol=config.symbol)
 
     if intent is None:
-        log.info("no action required")
         state.record_run(conn, bar_ts, datetime.now(UTC), signal, "none",
                          position, equity)
-        return 0
+        return (f"no action | rsi {rsi:.1f} signal {signal:.0f} "
+                f"position {position:.4f} equity {equity:,.2f}")
 
     log.info("decision: %s %.6f %s (%s)",
              intent.side, intent.qty, intent.symbol, intent.reason)
@@ -78,7 +80,28 @@ def main():
                        f"rsi={rsi:.1f} signal={signal:.0f} {intent.reason}")
     state.record_run(conn, bar_ts, datetime.now(UTC), signal, intent.side,
                      position, equity)
-    log.info("done")
+    return (f"{intent.side} {intent.qty:.4f} {intent.symbol} @ {price:.2f} | "
+            f"rsi {rsi:.1f} equity {equity:,.2f} order {order_id}")
+
+
+def main():
+    setup_logging()
+
+    # A failure here means no config, and therefore no heartbeat URL to report
+    # it with. The missing ping is itself the signal: the check goes silent and
+    # healthchecks raises the alarm after the grace period.
+    config = load_config()
+    log.info("starting: %s", config)
+
+    try:
+        summary = run_once(config)
+    except Exception:
+        log.exception("run failed")
+        heartbeat.fail(config.heartbeat_url, traceback.format_exc())
+        return 1
+
+    log.info(summary)
+    heartbeat.ok(config.heartbeat_url, summary)
     return 0
 
 
@@ -86,5 +109,5 @@ if __name__ == "__main__":
     try:
         sys.exit(main())
     except Exception:
-        logging.getLogger("bot").exception("run failed")
+        logging.getLogger("bot").exception("run failed before configuration")
         sys.exit(1)

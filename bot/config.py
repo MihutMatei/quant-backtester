@@ -44,6 +44,9 @@ class BotConfig:
     feed: str = "sip"
     db_path: str = "data/bot.db"
     dry_run: bool = False
+    # Anyone holding this can mark the check healthy and suppress the
+    # alert, so it is a credential: hidden from repr, kept out of the repo.
+    heartbeat_url: str = field(default="", repr=False)
     # repr=False so credentials cannot reach a log line via the dataclass repr.
     api_key: str = field(default="", repr=False)
     api_secret: str = field(default="", repr=False)
@@ -80,6 +83,7 @@ def load_config():
         feed=os.environ.get("BOT_FEED", "sip").lower(),
         db_path=os.environ.get("BOT_DB_PATH", "data/bot.db"),
         dry_run=_env_bool("BOT_DRY_RUN"),
+        heartbeat_url=os.environ.get("BOT_HEARTBEAT_URL", "").strip(),
         api_key=os.environ.get("APCA_API_KEY_ID", ""),
         api_secret=os.environ.get("APCA_API_SECRET_KEY", ""),
     ).validate()

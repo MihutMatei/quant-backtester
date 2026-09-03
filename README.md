@@ -216,6 +216,7 @@ is read-only.
 | `BOT_FEED` | `sip` | |
 | `BOT_DB_PATH` | `data/bot.db` | `/app/data/bot.db` in the image |
 | `BOT_DRY_RUN` | `0` | |
+| `BOT_HEARTBEAT_URL` | unset | healthchecks.io ping URL; unset disables |
 
 Credentials come from `APCA_API_KEY_ID` / `APCA_API_SECRET_KEY`, never from
 config files in the repo.
@@ -294,6 +295,45 @@ question systemd and journald already answer, and a failed run shows up in
 Credentials live in `/etc/quant-bot/env`, root-owned and `0600` - outside the
 repo and outside the image. State is a named Docker volume, so idempotency and
 the trade log survive restarts and image rebuilds.
+
+---
+
+## Heartbeat
+
+systemd catches runs that *fail*. It cannot catch runs that never happen - a
+disabled timer, a stopped instance, a machine that never came back from a
+reboot. Nothing fails in those cases, so nothing fires, and the silence looks
+exactly like a healthy weekend. The detector has to live somewhere the
+instance's death cannot reach.
+
+Set `BOT_HEARTBEAT_URL` to a healthchecks.io ping URL. The bot posts to it after
+every successful run and to `<url>/fail` on an exception.
+
+On the healthchecks.io side, create a check with **period 1 hour, grace 20
+minutes**. Use period rather than cron: `Persistent=true` makes a missed run
+fire immediately on boot rather than at `:05`, and the bot always acts on the
+latest closed bar, so a late run trades identically to a punctual one. You care
+whether it is running at all, not whether it is on time.
+
+Two properties the tests pin, because both would be self-defeating:
+
+* **Unset is a silent no-op.** No network call, no warning, no behaviour change.
+* **A ping can never break a run.** Every network error is swallowed and logged;
+  the order is submitted *before* the ping, so a ping means the work finished
+  rather than that it started. Monitoring must not be able to take down the
+  thing it monitors.
+
+Do-nothing runs ping too. A run that correctly decided to stay flat is a
+healthy run, and staying quiet would make a slow market indistinguishable from
+a dead bot.
+
+The summary line is sent as the POST body, so the check's history reads as an
+hour-by-hour record of what the bot decided:
+
+```
+no action | rsi 72.8 signal 0 position 0.0000 equity 99,999.98
+buy 64.7000 SPY @ 772.88 | rsi 43.1 equity 100,000.00 order 30e5d8cd
+```
 
 ---
 

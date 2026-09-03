@@ -29,6 +29,10 @@ if [[ ! -f "$ENV_FILE" ]]; then
     cat > "$ENV_FILE" <<'TEMPLATE'
 APCA_API_KEY_ID=
 APCA_API_SECRET_KEY=
+# Dead man's switch. Paste the healthchecks.io ping URL here; unset disables
+# the heartbeat entirely. Treat it as a credential - anyone holding it can mark
+# the check healthy and suppress the alert.
+BOT_HEARTBEAT_URL=
 # Optional overrides - see the README for defaults.
 # BOT_SYMBOL=SPY
 # BOT_NOTIONAL=50000
