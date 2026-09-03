@@ -26,6 +26,8 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
+from core.env import load_dotenv  # noqa: E402
+
 OK, WARN, FAIL = "  ok  ", " warn ", " FAIL "
 _failures = []
 _warnings = []
@@ -41,18 +43,6 @@ def line(status, label, detail=""):
 
 def header(title):
     print(f"\n{'-' * 68}\n{title}\n{'-' * 68}")
-
-
-def load_dotenv(path=REPO_ROOT / ".env"):
-    """Minimal .env reader so this needs no extra dependency."""
-    if not path.exists():
-        return
-    for raw in path.read_text().splitlines():
-        raw = raw.strip()
-        if not raw or raw.startswith("#") or "=" not in raw:
-            continue
-        key, _, value = raw.partition("=")
-        os.environ.setdefault(key.strip(), value.strip().strip("'\""))
 
 
 def parse_timeframe(interval):

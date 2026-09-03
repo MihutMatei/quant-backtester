@@ -1,5 +1,5 @@
 from core.signals import rsi_signals
-from research.data_fetcher import fetch_data, fetch_data_legacy
+from research.data_fetcher import get_data
 from research.legacy_signals import (
     matei_signals,
     mean_reversion_signals,
@@ -7,7 +7,7 @@ from research.legacy_signals import (
     williamsr_signals,
 )
 
-def generate_moving_avg_crossover_strat(ticker, start_date=None, end_date=None, short_window=20, long_window=50, period=None, interval="1d"):
+def generate_moving_avg_crossover_strat(ticker, start_date=None, end_date=None, short_window=20, long_window=50, period=None, interval="1d", source="yfinance"):
     """
     Generate moving average crossover strategy with flexible time control
     
@@ -18,17 +18,13 @@ def generate_moving_avg_crossover_strat(ticker, start_date=None, end_date=None, 
         period: Period string (1d,5d,1mo,3mo,6mo,1y,2y,5y,10y,ytd,max)
         interval: Data interval (1m,2m,5m,15m,30m,60m,90m,1h,1d,5d,1wk,1mo,3mo)
     """
-    if start_date and end_date and not period:
-        # Legacy mode - use start/end dates
-        df = fetch_data_legacy(ticker, start_date, end_date)
-    else:
-        # New flexible mode
-        df = fetch_data(ticker, start_date=start_date, end_date=end_date, period=period, interval=interval)
+    df = get_data(ticker, source=source, start_date=start_date,
+                  end_date=end_date, period=period, interval=interval)
     
     signals = moving_average_signals(df, short_window, long_window)
     return df, signals
 
-def generate_mean_reversal_strat(ticker, start_date=None, end_date=None, window=20, threshold=1.0, period=None, interval="1d"):
+def generate_mean_reversal_strat(ticker, start_date=None, end_date=None, window=20, threshold=1.0, period=None, interval="1d", source="yfinance"):
     """
     Generate mean reversion strategy with flexible time control
     
@@ -40,12 +36,8 @@ def generate_mean_reversal_strat(ticker, start_date=None, end_date=None, window=
         period: Period string (1d,5d,1mo,3mo,6mo,1y,2y,5y,10y,ytd,max)
         interval: Data interval (1m,2m,5m,15m,30m,60m,90m,1h,1d,5d,1wk,1mo,3mo)
     """
-    if start_date and end_date and not period:
-        # Legacy mode - use start/end dates
-        df = fetch_data_legacy(ticker, start_date, end_date)
-    else:
-        # New flexible mode
-        df = fetch_data(ticker, start_date=start_date, end_date=end_date, period=period, interval=interval)
+    df = get_data(ticker, source=source, start_date=start_date,
+                  end_date=end_date, period=period, interval=interval)
     
     signals = mean_reversion_signals(df, window, threshold)
     return df, signals
@@ -63,20 +55,15 @@ def generate_williamsr_strat(
     long_entry_thresh:  float = -80.0,
     long_exit_thresh:   float = -50.0,
     short_entry_thresh: float = -20.0,
-    short_exit_thresh:  float = -50.0
+    short_exit_thresh:  float = -50.0,
+    source:             str   = "yfinance"
 ):
     """
     Returns price df and signals with explicit buy/sell/short/cover flags.
     """
     # 1) fetch data
-    if start_date and end_date and not period:
-        df = fetch_data_legacy(ticker, start_date, end_date)
-    else:
-        df = fetch_data(ticker,
-                        start_date=start_date,
-                        end_date=end_date,
-                        period=period,
-                        interval=interval)
+    df = get_data(ticker, source=source, start_date=start_date,
+                  end_date=end_date, period=period, interval=interval)
 
     # 2) compute %R + stateful signal
     signals = williamsr_signals(
@@ -109,7 +96,8 @@ def generate_rsi_strat(
     rsi_period=14,
     buy_threshold=30,
     sell_threshold=70,
-    long_only=True
+    long_only=True,
+    source="yfinance"
 ):
     """
     Generate pure RSI strategy
@@ -123,10 +111,8 @@ def generate_rsi_strat(
         buy_threshold: Buy when RSI <= this value (oversold)
         sell_threshold: Sell when RSI >= this value (overbought)
     """
-    if start_date and end_date and not period:
-        df = fetch_data_legacy(ticker, start_date, end_date)
-    else:
-        df = fetch_data(ticker, start_date=start_date, end_date=end_date, period=period, interval=interval)
+    df = get_data(ticker, source=source, start_date=start_date,
+                  end_date=end_date, period=period, interval=interval)
     
     signals = rsi_signals(df, rsi_period, buy_threshold, sell_threshold,
                           long_only=long_only)
@@ -146,7 +132,8 @@ def generate_matei_strat(
     wr_buy_th=-85,
     wr_sell_th=-15,
     vol_buy_th=0.007,
-    vol_sell_th=0.000
+    vol_sell_th=0.000,
+    source="yfinance"
 ):
     """
     Generate Matei's triple indicator strategy with RSI, Williams %R, and volatility filters
@@ -166,11 +153,8 @@ def generate_matei_strat(
         vol_buy_th: Volatility buy threshold
         vol_sell_th: Volatility sell threshold
     """
-    # Fetch data using existing infrastructure
-    if start_date and end_date and not period:
-        df = fetch_data_legacy(ticker, start_date, end_date)
-    else:
-        df = fetch_data(ticker, start_date=start_date, end_date=end_date, period=period, interval=interval)
+    df = get_data(ticker, source=source, start_date=start_date,
+                  end_date=end_date, period=period, interval=interval)
     
     # Generate signals using the Matei strategy
     signals = matei_signals(

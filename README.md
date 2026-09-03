@@ -125,9 +125,20 @@ Dependencies are split by target so the deployed image stays small:
    TICKER = 'PLNT'
    PERIOD = "30d"
    INTERVAL = "5m"
-   STRATEGY = 3        # 1=mean reversion, 2=moving average, 3=Williams %R, 4=combined, 5=RSI
-   EXECUTION_LAG = 1   # bars between signal and fill; 0 restores same-bar close fills
+   STRATEGY = 3          # 1=mean reversion, 2=moving average, 3=Williams %R, 4=combined, 5=RSI
+   EXECUTION_LAG = 1     # bars between signal and fill; 0 restores same-bar close fills
+   DATA_SOURCE = "alpaca"  # "alpaca" (what the bot trades) or "yfinance"
    ```
+
+   `DATA_SOURCE = "alpaca"` backtests on the same bars the live bot will act on,
+   filtered to the regular session. It needs `APCA_API_KEY_ID` and
+   `APCA_API_SECRET_KEY` in `.env`. Run `python scripts/check_alpaca.py` first to
+   confirm connectivity.
+
+   The two sources are not interchangeable: Alpaca hourly bars align to clock
+   hours and yfinance to the market session, so they share no timestamps and
+   aggregate different windows. Alpaca also serves 6+ years of hourly history
+   against yfinance's 730-day cap.
 
 2. **Run the backtest** from the repository root
 

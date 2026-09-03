@@ -89,3 +89,23 @@ def fetch_data_legacy(ticker, start_date, end_date):
     """Legacy function to maintain backward compatibility"""
     return fetch_data(ticker, start_date=start_date, end_date=end_date)
 
+
+
+def get_data(ticker, source="yfinance", start_date=None, end_date=None,
+             period=None, interval="1d", **kwargs):
+    """Fetch OHLCV from the configured source.
+
+    'yfinance' keeps the historical research behaviour; 'alpaca' returns the
+    same bars the live bot will trade (regular session only by default).
+    """
+    if source == "alpaca":
+        from research.alpaca_data import fetch_alpaca
+        return fetch_alpaca(ticker, start_date=start_date, end_date=end_date,
+                            period=period, interval=interval, **kwargs)
+    if source != "yfinance":
+        raise ValueError(f"Unknown data source {source!r}; use 'yfinance' or 'alpaca'")
+
+    if start_date and end_date and not period:
+        return fetch_data_legacy(ticker, start_date, end_date)
+    return fetch_data(ticker, start_date=start_date, end_date=end_date,
+                      period=period, interval=interval)

@@ -7,6 +7,8 @@ TICKER     = 'PLNT'
 PERIOD     = "30d"      # 1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, 10y, ytd, max (longer period for more data)
 INTERVAL   = "5m"       # 1m, 2m, 5m, 15m, 30m, 60m, 90m, 1h, 1d, 5d, 1wk, 1mo, 3mo (hourly for even less noise)
 INITIAL_CAPITAL = 10000.0
+DATA_SOURCE = "alpaca"   # "alpaca" (what the bot trades) or "yfinance"
+ALPACA_FEED = "sip"      # "sip" (consolidated) or "iex" (single venue, gappy)
 
 
 # Risk Management params
@@ -67,10 +69,9 @@ CUSTOM_HOUR_RANGES    = [(2, 4), (8, 12), (20, 24)]
 
 # ====================================
 
-import yfinance as yf
-
 from research.analysis import analyze_trading_patterns
 from research.backtest import backtest_strategy
+from research.data_fetcher import get_data
 from research.plotting import plot_portfolio, suggest_custom_ranges
 from research.strategies import (
     generate_matei_strat,
@@ -89,6 +90,7 @@ def main():
                 TICKER,
                 period=PERIOD,
                 interval=INTERVAL,
+                source=DATA_SOURCE,
                 window=MR_WINDOW,
                 threshold=MR_THRESHOLD
             )
@@ -98,6 +100,7 @@ def main():
                 TICKER,
                 period=PERIOD,
                 interval=INTERVAL,
+                source=DATA_SOURCE,
                 short_window=MA_SHORT_WINDOW,
                 long_window=MA_LONG_WINDOW
             )
@@ -107,6 +110,7 @@ def main():
                 TICKER,
                 period=PERIOD,
                 interval=INTERVAL,
+                source=DATA_SOURCE,
                 wr_period=WR_PERIOD,
                 long_entry_thresh=WR_LONG_ENTRY_THRESH,
                 long_exit_thresh=WR_LONG_EXIT_THRESH,
@@ -118,6 +122,7 @@ def main():
                 TICKER,
                 period=PERIOD,
                 interval=INTERVAL,
+                source=DATA_SOURCE,
                 rsi_period=MATEI_RSI_PERIOD,
                 wr_period=MATEI_WR_PERIOD,
                 vol_lookback=MATEI_VOL_LOOKBACK,
@@ -133,6 +138,7 @@ def main():
                 TICKER,
                 period=PERIOD,
                 interval=INTERVAL,
+                source=DATA_SOURCE,
                 rsi_period=RSI_PERIOD,
                 buy_threshold=RSI_BUY_THRESHOLD,
                 sell_threshold=RSI_SELL_THRESHOLD,
@@ -148,13 +154,18 @@ def main():
         print(e)
         return
 
-    # 2) Download benchmark data
-    benchmark = yf.download(
-        TICKER,
-        period=PERIOD,
-        interval=INTERVAL,
-        auto_adjust=True
-    )
+    # 2) Benchmark data - same source as the strategy, or its index will not
+    #    align with the portfolio and the buy & hold line becomes all-NaN.
+    try:
+        benchmark = get_data(
+            TICKER,
+            source=DATA_SOURCE,
+            period=PERIOD,
+            interval=INTERVAL,
+        )
+    except Exception as exc:
+        print(f"Could not download benchmark data: {exc}")
+        return
     if benchmark.empty:
         print("Could not download benchmark data.")
         return

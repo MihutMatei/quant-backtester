@@ -50,3 +50,34 @@ def validate_ohlcv(df, context=""):
         raise ValueError(f"OHLCV frame{where} has {n} NaN Close value(s)")
 
     return df
+
+
+def from_alpaca_bars(df):
+    """Convert a raw alpaca-py bars frame to the OHLCV contract.
+
+    Alpaca returns a (symbol, timestamp) MultiIndex with lowercase columns plus
+    trade_count and vwap. Kept here rather than in bot/ so the backtester and
+    the bot shape Alpaca data identically. Pure pandas - no alpaca import.
+    """
+    if getattr(df.index, "nlevels", 1) > 1:
+        df = df.droplevel("symbol")
+    df = df.rename(columns={col: col.capitalize() for col in df.columns})
+    return normalize_ohlcv(df)
+
+
+def filter_regular_session(df, tz="America/New_York", start="09:30", end="16:00"):
+    """Drop pre- and post-market bars, keeping [start, end) in `tz`.
+
+    Alpaca includes extended hours by default; yfinance does not. Filtering
+    makes the two comparable. No-op for daily-or-coarser bars, where the
+    concept does not apply.
+    """
+    if df.empty or not isinstance(df.index, pd.DatetimeIndex) or df.index.tz is None:
+        return df
+
+    # Daily and coarser bars have no intraday session to filter.
+    if len(df) > 1 and df.index.to_series().diff().median() >= pd.Timedelta(days=1):
+        return df
+
+    local = df.tz_convert(tz)
+    return local.between_time(start, end, inclusive="left").tz_convert(df.index.tz)
