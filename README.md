@@ -246,6 +246,57 @@ reproduce, because history contains only closed bars.
 
 ---
 
+## Deployment
+
+The bot is one-shot: a systemd timer starts it, it evaluates one bar, it exits.
+Nothing runs in between.
+
+```
+docker build -t quant-bot:latest .
+sudo deploy/install.sh          # writes /etc/quant-bot/env on first run
+# add the Alpaca keys to /etc/quant-bot/env, then:
+sudo deploy/install.sh
+```
+
+| file | |
+|---|---|
+| `deploy/quant-bot.service` | one `docker run`, `Type=oneshot` |
+| `deploy/quant-bot.timer` | fires at `*:05:00`, `Persistent=true` |
+| `deploy/quant-bot-failure@.service` | `OnFailure=` hook - add a real notifier here |
+
+```
+journalctl -u quant-bot -f            # the trade log
+systemctl list-timers quant-bot.timer # when it next fires
+systemctl list-units --failed         # did anything break
+systemctl start quant-bot.service     # run one bar now
+systemctl disable --now quant-bot.timer
+```
+
+**Why `:05` and not `:00`.** The hourly bar closes exactly on the hour; firing
+on the boundary races the bar's own aggregation. Five past is clear of it.
+Alpaca's `end` parameter filters which bars come back rather than truncating
+them, so the twenty-minute delay on recent SIP data does not cut the last bar
+short - it only decides whether that bar is returned at all.
+
+**Market hours are not in the schedule, deliberately.** The timer fires around
+the clock and `bot/run.py` asks Alpaca's clock, which knows about holidays,
+half-days and unscheduled closures. A hardcoded window does not, and would try
+to trade on days the market is shut. An out-of-hours run costs one API call and
+exits 0.
+
+**Why one-shot rather than a container that sleeps.** `--restart always` only
+notices a process *exiting*. A bot that deadlocks or blocks on a socket keeps
+the container `Up` and Docker satisfied while nothing trades - liveness without
+correctness. With a timer, "did it run and exit 0 in the last hour" is a
+question systemd and journald already answer, and a failed run shows up in
+`systemctl list-units --failed` without anything being built.
+
+Credentials live in `/etc/quant-bot/env`, root-owned and `0600` - outside the
+repo and outside the image. State is a named Docker volume, so idempotency and
+the trade log survive restarts and image rebuilds.
+
+---
+
 ## Extending
 
 * Add signal logic to `core/signals.py` if the bot should trade it, or

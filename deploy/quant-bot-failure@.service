@@ -1,0 +1,10 @@
+# Invoked by OnFailure= when a run exits non-zero. Deliberately minimal: it
+# makes the failure greppable and gives you one place to add a real notifier.
+[Unit]
+Description=Report a failed quant-bot run (%i)
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'echo "QUANT-BOT RUN FAILED: %i at $(date -Is)"; \
+    systemctl status --no-pager --lines=20 %i || true'
+SyslogIdentifier=quant-bot-alert

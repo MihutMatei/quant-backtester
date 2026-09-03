@@ -1,0 +1,26 @@
+# One-shot: evaluate the latest closed bar, act, exit.
+# Started by quant-bot.timer, not enabled directly.
+[Unit]
+Description=Quant bot - evaluate the latest closed bar
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+# Shout into the journal if a run fails. Point this at a real notifier
+# (webhook, email) once you have one.
+OnFailure=quant-bot-failure@%n.service
+
+[Service]
+Type=oneshot
+
+# Credentials live outside the repo and outside the image. Root-owned, 0600.
+ExecStart=/usr/bin/docker run --rm \
+    --env-file /etc/quant-bot/env \
+    --volume quant-bot-state:/app/data \
+    quant-bot:latest
+
+# A run is seconds of work. If it is still going after five minutes something
+# is wrong - fail loudly rather than overlapping the next fire.
+TimeoutStartSec=300
+
+# Journald tags every line, so `journalctl -u quant-bot` is the trade log.
+SyslogIdentifier=quant-bot

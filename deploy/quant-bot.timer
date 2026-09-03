@@ -1,0 +1,22 @@
+# Fires at five past each hour, around the clock.
+#
+# Market hours are deliberately NOT encoded here. bot/run.py asks Alpaca's
+# clock, which knows about holidays, half-days and unscheduled closures; a
+# hardcoded window does not, and would try to trade on days the market is shut.
+# An out-of-hours run costs one API call and exits 0.
+#
+# :05 rather than :00 because the hourly bar closes exactly on the hour -
+# firing on the boundary races the bar's own aggregation.
+[Unit]
+Description=Run the quant bot at five past each hour
+
+[Timer]
+OnCalendar=*:05:00
+# Run a missed occurrence on boot: the bot fetches the latest closed bar, so a
+# late run acts on current data rather than stale data.
+Persistent=true
+AccuracySec=30s
+Unit=quant-bot.service
+
+[Install]
+WantedBy=timers.target
